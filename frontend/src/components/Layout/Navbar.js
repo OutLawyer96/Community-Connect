@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { Menu, X, User, LogOut, Home, Users, Search } from 'lucide-react';
+import { Menu, X, User, LogOut, Home, Users, Search, Building2, FileText, Shield } from 'lucide-react';
 import Logo from './Logo';
 // Import your logo (uncomment and adjust the path based on your logo file)
 // import logo from '../../assets/images/logo.png'; // or .svg, .jpg
@@ -42,6 +42,13 @@ function Navbar() {
               <Users className="w-4 h-4 mr-2" />
               Providers
             </Link>
+            <Link 
+              to="/claim-business" 
+              className="flex items-center text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+            >
+              <Building2 className="w-4 h-4 mr-2" />
+              Claim Business
+            </Link>
             
             {currentUser ? (
               <div className="flex items-center space-x-4">
@@ -52,6 +59,22 @@ function Navbar() {
                   <User className="w-4 h-4 mr-2" />
                   Dashboard
                 </Link>
+                <Link 
+                  to="/my-claims" 
+                  className="flex items-center text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  My Claims
+                </Link>
+                {(currentUser.is_staff || currentUser.is_superuser) && (
+                  <Link 
+                    to="/admin/claims" 
+                    className="flex items-center text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                  >
+                    <Shield className="w-4 h-4 mr-2" />
+                    Admin
+                  </Link>
+                )}
                 <button
                   onClick={handleLogout}
                   className="flex items-center text-gray-700 hover:text-danger-600 px-3 py-2 rounded-md text-sm font-medium transition-colors"
@@ -115,6 +138,14 @@ function Navbar() {
               <Users className="w-4 h-4 mr-2" />
               Providers
             </Link>
+            <Link 
+              to="/claim-business" 
+              className="flex items-center text-gray-700 hover:text-primary-600 hover:bg-gray-50 block px-3 py-2 rounded-md text-base font-medium"
+              onClick={() => setIsOpen(false)}
+            >
+              <Building2 className="w-4 h-4 mr-2" />
+              Claim Business
+            </Link>
             
             {currentUser ? (
               <>
@@ -126,6 +157,24 @@ function Navbar() {
                   <User className="w-4 h-4 mr-2" />
                   Dashboard
                 </Link>
+                <Link 
+                  to="/my-claims" 
+                  className="flex items-center text-gray-700 hover:text-primary-600 hover:bg-gray-50 block px-3 py-2 rounded-md text-base font-medium"
+                  onClick={() => setIsOpen(false)}
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  My Claims
+                </Link>
+                {(currentUser.is_staff || currentUser.is_superuser) && (
+                  <Link 
+                    to="/admin/claims" 
+                    className="flex items-center text-gray-700 hover:text-primary-600 hover:bg-gray-50 block px-3 py-2 rounded-md text-base font-medium"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Shield className="w-4 h-4 mr-2" />
+                    Admin
+                  </Link>
+                )}
                 <button
                   onClick={() => {
                     handleLogout();

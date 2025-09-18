@@ -38,4 +38,12 @@ urlpatterns = [
     
     # Search endpoint
     path('search/', views.search_providers, name='search_providers'),
+    
+    # Claim endpoints
+    path('claims/', views.ClaimListCreateView.as_view(), name='claim_list_create'),
+    path('claims/<int:pk>/', views.ClaimDetailView.as_view(), name='claim_detail'),
+    path('claims/<int:claim_id>/verify-email/', views.verify_claim_email, name='verify_claim_email'),
+    path('claims/<int:claim_id>/approve/', views.approve_claim, name='approve_claim'),
+    path('claims/<int:claim_id>/reject/', views.reject_claim, name='reject_claim'),
+    path('unclaimed-providers/', views.unclaimed_providers, name='unclaimed_providers'),
 ]

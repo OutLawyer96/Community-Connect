@@ -3,14 +3,9 @@ from django.core.management.base import BaseCommand
 from django.contrib.auth.hashers import make_password
 from faker import Faker
 from api.models import User, Provider, Address, Category, Service, Review
+from api.config import DataConfig, LocationConfig, BusinessConfig
 
-# Number of providers to create
-NUM_PROVIDERS = 1000
-NUM_CUSTOMERS = 200
-NUM_SERVICES_PER_PROVIDER = 3
-NUM_REVIEWS = 2000
-
-# Indian cities with coordinates and states
+# Indian cities with coordinates and states - use the extended list from configuration
 INDIAN_CITIES = [
     {'name': 'Mumbai', 'state': 'Maharashtra', 'lat': 19.0760, 'lng': 72.8777, 'pin': '400001'},
     {'name': 'Delhi', 'state': 'Delhi', 'lat': 28.7041, 'lng': 77.1025, 'pin': '110001'},
@@ -32,26 +27,6 @@ INDIAN_CITIES = [
     {'name': 'Pimpri-Chinchwad', 'state': 'Maharashtra', 'lat': 18.6298, 'lng': 73.7997, 'pin': '411017'},
     {'name': 'Patna', 'state': 'Bihar', 'lat': 25.5941, 'lng': 85.1376, 'pin': '800001'},
     {'name': 'Vadodara', 'state': 'Gujarat', 'lat': 22.3072, 'lng': 73.1812, 'pin': '390001'},
-    {'name': 'Ghaziabad', 'state': 'Uttar Pradesh', 'lat': 28.6692, 'lng': 77.4538, 'pin': '201001'},
-    {'name': 'Ludhiana', 'state': 'Punjab', 'lat': 30.9010, 'lng': 75.8573, 'pin': '141001'},
-    {'name': 'Agra', 'state': 'Uttar Pradesh', 'lat': 27.1767, 'lng': 78.0081, 'pin': '282001'},
-    {'name': 'Nashik', 'state': 'Maharashtra', 'lat': 19.9975, 'lng': 73.7898, 'pin': '422001'},
-    {'name': 'Faridabad', 'state': 'Haryana', 'lat': 28.4089, 'lng': 77.3178, 'pin': '121001'},
-    {'name': 'Meerut', 'state': 'Uttar Pradesh', 'lat': 28.9845, 'lng': 77.7064, 'pin': '250001'},
-    {'name': 'Rajkot', 'state': 'Gujarat', 'lat': 22.3039, 'lng': 70.8022, 'pin': '360001'},
-    {'name': 'Kalyan-Dombivli', 'state': 'Maharashtra', 'lat': 19.2403, 'lng': 73.1305, 'pin': '421201'},
-    {'name': 'Vasai-Virar', 'state': 'Maharashtra', 'lat': 19.4912, 'lng': 72.8054, 'pin': '401201'},
-    {'name': 'Varanasi', 'state': 'Uttar Pradesh', 'lat': 25.3176, 'lng': 82.9739, 'pin': '221001'},
-    {'name': 'Srinagar', 'state': 'Jammu and Kashmir', 'lat': 34.0837, 'lng': 74.7973, 'pin': '190001'},
-    {'name': 'Aurangabad', 'state': 'Maharashtra', 'lat': 19.8762, 'lng': 75.3433, 'pin': '431001'},
-    {'name': 'Dhanbad', 'state': 'Jharkhand', 'lat': 23.7957, 'lng': 86.4304, 'pin': '826001'},
-    {'name': 'Amritsar', 'state': 'Punjab', 'lat': 31.6340, 'lng': 74.8723, 'pin': '143001'},
-    {'name': 'Navi Mumbai', 'state': 'Maharashtra', 'lat': 19.0330, 'lng': 73.0297, 'pin': '400614'},
-    {'name': 'Allahabad', 'state': 'Uttar Pradesh', 'lat': 25.4358, 'lng': 81.8463, 'pin': '211001'},
-    {'name': 'Ranchi', 'state': 'Jharkhand', 'lat': 23.3441, 'lng': 85.3096, 'pin': '834001'},
-    {'name': 'Howrah', 'state': 'West Bengal', 'lat': 22.5958, 'lng': 88.2636, 'pin': '711101'},
-    {'name': 'Coimbatore', 'state': 'Tamil Nadu', 'lat': 11.0168, 'lng': 76.9558, 'pin': '641001'},
-    {'name': 'Jabalpur', 'state': 'Madhya Pradesh', 'lat': 23.1815, 'lng': 79.9864, 'pin': '482001'},
 ]
 
 # Indian first names by region
@@ -228,20 +203,20 @@ REGIONAL_BUSINESSES = {
 }
 
 class Command(BaseCommand):
-    help = f'Seeds the database with {NUM_PROVIDERS} providers and realistic data for performance testing'
+    help = f'Seeds the database with {DataConfig.NUM_PROVIDERS} providers and realistic data for performance testing'
 
     def add_arguments(self, parser):
         parser.add_argument(
             '--providers',
             type=int,
-            default=NUM_PROVIDERS,
-            help=f'Number of providers to create (default: {NUM_PROVIDERS})'
+            default=DataConfig.NUM_PROVIDERS,
+            help=f'Number of providers to create (default: {DataConfig.NUM_PROVIDERS})'
         )
         parser.add_argument(
             '--customers',
             type=int,
-            default=NUM_CUSTOMERS,
-            help=f'Number of customers to create (default: {NUM_CUSTOMERS})'
+            default=DataConfig.NUM_CUSTOMERS,
+            help=f'Number of customers to create (default: {DataConfig.NUM_CUSTOMERS})'
         )
         parser.add_argument(
             '--clear',
@@ -630,7 +605,7 @@ class Command(BaseCommand):
         ]
         
         # Create realistic review distribution (more positive reviews as typical in Indian markets)
-        for _ in range(min(NUM_REVIEWS, len(customers) * len(providers) // 8)):  # Higher review ratio
+        for _ in range(min(DataConfig.NUM_REVIEWS, len(customers) * len(providers) // 8)):  # Higher review ratio
             customer = random.choice(customers)
             provider = random.choice(providers)
             

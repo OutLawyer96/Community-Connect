@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.db.models import Avg
-from .models import Category, Provider, User, Service, Address, Review
+from .models import Category, Provider, User, Service, Address, Review, Claim
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -47,7 +47,8 @@ class ReviewSerializer(serializers.ModelSerializer):
 class ProviderSerializer(serializers.ModelSerializer):
     user = serializers.SlugRelatedField(
         slug_field='username',
-        read_only=True
+        read_only=True,
+        allow_null=True
     )
     services = ServiceSerializer(many=True, read_only=True)
     addresses = AddressSerializer(many=True, read_only=True)
@@ -57,7 +58,7 @@ class ProviderSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Provider
-        fields = ['user', 'business_name', 'description', 'created_at', 
+        fields = ['user', 'business_name', 'description', 'created_at', 'is_claimed',
                  'services', 'addresses', 'reviews', 'average_rating', 'review_count']
         
     def get_average_rating(self, obj):
@@ -69,13 +70,18 @@ class ProviderSerializer(serializers.ModelSerializer):
 
 class ProviderListSerializer(serializers.ModelSerializer):
     """Lighter serializer for list views to improve performance"""
+    user = serializers.SlugRelatedField(
+        slug_field='username',
+        read_only=True,
+        allow_null=True
+    )
     average_rating = serializers.SerializerMethodField()
     review_count = serializers.SerializerMethodField()
     primary_address = serializers.SerializerMethodField()
     
     class Meta:
         model = Provider
-        fields = ['user', 'business_name', 'description', 'average_rating', 
+        fields = ['user', 'business_name', 'description', 'is_claimed', 'average_rating', 
                  'review_count', 'primary_address']
         
     def get_average_rating(self, obj):
@@ -107,3 +113,88 @@ class LoginSerializer(serializers.Serializer):
             return attrs
         else:
             raise serializers.ValidationError('Must include username and password')
+
+class ClaimSerializer(serializers.ModelSerializer):
+    claimant_username = serializers.CharField(source='claimant.username', read_only=True)
+    provider_name = serializers.CharField(source='provider.business_name', read_only=True)
+    reviewed_by_username = serializers.CharField(source='reviewed_by.username', read_only=True)
+    
+    class Meta:
+        model = Claim
+        fields = [
+            'id', 'provider', 'provider_name', 'claimant', 'claimant_username',
+            'business_documents', 'additional_info', 'status', 'admin_notes',
+            'verification_token', 'email_verified', 'created_at', 'updated_at',
+            'reviewed_by', 'reviewed_by_username', 'reviewed_at'
+        ]
+        read_only_fields = ['verification_token', 'reviewed_by', 'reviewed_at', 'admin_notes']
+        
+    def validate(self, data):
+        # Ensure a user can't claim the same provider multiple times
+        claimant = self.context['request'].user
+        provider = data.get('provider')
+        
+        if provider and Claim.objects.filter(provider=provider, claimant=claimant).exists():
+            raise serializers.ValidationError('You have already submitted a claim for this provider.')
+            
+        return data
+
+class ClaimCreateSerializer(serializers.ModelSerializer):
+    """Simplified serializer for creating claims"""
+    class Meta:
+        model = Claim
+        fields = ['provider', 'business_documents', 'additional_info']
+    
+    def validate_business_documents(self, value):
+        """Validate uploaded business documents"""
+        if value:
+            # Check file size (5MB limit)
+            if value.size > 5 * 1024 * 1024:
+                raise serializers.ValidationError(
+                    "File size cannot exceed 5MB."
+                )
+            
+            # Check file type
+            allowed_types = [
+                'application/pdf',
+                'application/msword',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'image/jpeg',
+                'image/jpg',
+                'image/png'
+            ]
+            
+            if value.content_type not in allowed_types:
+                raise serializers.ValidationError(
+                    "Only PDF, DOC, DOCX, JPG, JPEG, and PNG files are allowed."
+                )
+        
+        return value
+        
+    def validate(self, attrs):
+        """Validate claim creation"""
+        provider = attrs.get('provider')
+        user = self.context['request'].user
+        
+        # Check if provider is already claimed
+        if provider.is_claimed:
+            raise serializers.ValidationError(
+                "This provider has already been claimed and verified."
+            )
+        
+        # Check for duplicate claims by same user (only allow if previously rejected)
+        existing_claim = Claim.objects.filter(
+            provider=provider, 
+            claimant=user
+        ).exclude(status='rejected').first()
+        
+        if existing_claim:
+            raise serializers.ValidationError(
+                f"You already have a {existing_claim.status} claim for this provider."
+            )
+        
+        return attrs
+        
+    def create(self, validated_data):
+        validated_data['claimant'] = self.context['request'].user
+        return super().create(validated_data)

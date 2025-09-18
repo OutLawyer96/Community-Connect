@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
 import { Search, Filter, MapPin, Star, Clock, DollarSign, Grid, List, Map } from 'lucide-react';
+import apiClient from '../config/axios';
+import API_CONFIG, { APP_CONFIG } from '../config/api';
 import ProvidersMap from '../components/Map';
+import SearchFilters from '../components/SearchFilters';
+import Pagination from '../components/Pagination';
 
 function Providers() {
   const [providers, setProviders] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('grid'); // 'grid', 'list', 'map'
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
   const [filters, setFilters] = useState({
     search: '',
     category: '',
@@ -16,12 +22,10 @@ function Providers() {
     min_rating: ''
   });
 
-  const API_BASE_URL = 'http://localhost:8000/api';
-
   useEffect(() => {
     fetchProviders();
     fetchCategories();
-  }, [filters]);
+  }, [filters, currentPage]);
 
   const fetchProviders = async () => {
     try {
@@ -30,9 +34,15 @@ function Providers() {
       Object.entries(filters).forEach(([key, value]) => {
         if (value) params.append(key, value);
       });
+      params.append('page', currentPage);
+      params.append('page_size', APP_CONFIG.DEFAULT_PAGE_SIZE);
       
-      const response = await axios.get(`${API_BASE_URL}/providers/?${params}`);
-      setProviders(response.data.results || response.data || []);
+      const response = await apiClient.get(`${API_CONFIG.ENDPOINTS.PROVIDERS}?${params}`);
+      const data = response.data;
+      
+      setProviders(data.results || data || []);
+      setTotalPages(Math.ceil((data.count || data.length || 0) / APP_CONFIG.DEFAULT_PAGE_SIZE));
+      setTotalItems(data.count || data.length || 0);
     } catch (error) {
       console.error('Error fetching providers:', error);
       setProviders([]); // Set empty array as fallback
@@ -43,7 +53,7 @@ function Providers() {
 
   const fetchCategories = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/categories/`);
+      const response = await apiClient.get(API_CONFIG.ENDPOINTS.CATEGORIES);
       setCategories(response.data.results || response.data);
     } catch (error) {
       console.error('Error fetching categories:', error);

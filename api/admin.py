@@ -1,6 +1,8 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, Category, Provider, Service, Address, Review, Favorite
+from django.utils import timezone
+from .models import User, Category, Provider, Service, Address, Review, Favorite, Claim
+from .utils import approve_claim, reject_claim
 
 # Custom User Admin
 @admin.register(User)
@@ -23,8 +25,8 @@ class CategoryAdmin(admin.ModelAdmin):
 # Provider Admin
 @admin.register(Provider)
 class ProviderAdmin(admin.ModelAdmin):
-    list_display = ['business_name', 'user', 'is_active', 'average_rating']
-    list_filter = ['is_active']
+    list_display = ['business_name', 'user', 'is_claimed', 'is_active', 'average_rating']
+    list_filter = ['is_claimed', 'is_active']
     search_fields = ['business_name', 'user__username', 'user__email']
     readonly_fields = ['average_rating']
     
@@ -69,3 +71,51 @@ class FavoriteAdmin(admin.ModelAdmin):
     list_display = ['user', 'provider', 'created_at']
     list_filter = ['created_at']
     search_fields = ['user__username', 'provider__business_name']
+
+# Claim Admin
+@admin.register(Claim)
+class ClaimAdmin(admin.ModelAdmin):
+    list_display = ['provider', 'claimant', 'status', 'email_verified', 'created_at', 'reviewed_at']
+    list_filter = ['status', 'email_verified', 'created_at']
+    search_fields = ['provider__business_name', 'claimant__username', 'claimant__email']
+    readonly_fields = ['created_at', 'updated_at', 'verification_token']
+    
+    fieldsets = (
+        ('Claim Information', {
+            'fields': ('provider', 'claimant', 'status', 'email_verified')
+        }),
+        ('Documentation', {
+            'fields': ('business_documents', 'additional_info')
+        }),
+        ('Review Process', {
+            'fields': ('admin_notes', 'reviewed_by', 'reviewed_at')
+        }),
+        ('System Fields', {
+            'fields': ('verification_token', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    actions = ['approve_claims', 'reject_claims']
+    
+    def approve_claims(self, request, queryset):
+        """Bulk approve selected claims"""
+        updated = 0
+        for claim in queryset.filter(status='pending'):
+            success = approve_claim(claim, request.user)
+            if success:
+                updated += 1
+        
+        self.message_user(request, f'{updated} claims approved successfully.')
+    approve_claims.short_description = "Approve selected claims"
+    
+    def reject_claims(self, request, queryset):
+        """Bulk reject selected claims"""
+        updated = 0
+        for claim in queryset.filter(status='pending'):
+            success = reject_claim(claim, request.user, admin_notes="Bulk rejected via admin")
+            if success:
+                updated += 1
+        
+        self.message_user(request, f'{updated} claims rejected.')
+    reject_claims.short_description = "Reject selected claims"

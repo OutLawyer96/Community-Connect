@@ -1,19 +1,38 @@
 from django.shortcuts import render
 from django.contrib.auth import login, logout
 from django.db.models import Q, Avg
+from django.utils import timezone
 from rest_framework import generics, status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.throttling import UserRateThrottle, AnonRateThrottle
 
-from .models import Category, Provider, User, Service, Address, Review, Favorite
+from .models import Category, Provider, User, Service, Address, Review, Favorite, Claim
 from .serializers import (
     CategorySerializer, ProviderSerializer, ProviderListSerializer, 
     UserSerializer, ServiceSerializer, AddressSerializer, 
-    ReviewSerializer, LoginSerializer
+    ReviewSerializer, LoginSerializer, ClaimSerializer, ClaimCreateSerializer
 )
+from .permissions import ClaimCreatePermission, ClaimOwnerPermission
+from .utils import send_claim_verification_email, approve_claim as approve_claim_util, reject_claim as reject_claim_util
+
+
+# Custom throttle classes for claim endpoints
+class ClaimCreateThrottle(UserRateThrottle):
+    """Throttle for claim creation - 3 claims per hour per user"""
+    scope = 'claim_create'
+    rate = '3/hour'
+
+
+class ClaimViewThrottle(UserRateThrottle):
+    """Throttle for general claim viewing - 100 requests per hour per user"""
+    scope = 'claim_view'
+    rate = '100/hour'
+
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
@@ -433,6 +452,7 @@ def user_dashboard(request):
         'user': UserSerializer(user).data,
         'reviews_count': user.reviews.count(),
         'favorites_count': user.favorites.count() if hasattr(user, 'favorites') else 0,
+        'claims_count': user.claims.count() if hasattr(user, 'claims') else 0,
     }
     
     if user.role == 'provider':
@@ -443,3 +463,304 @@ def user_dashboard(request):
             data['provider'] = None
     
     return Response(data)
+
+
+# =====================
+# CLAIM MANAGEMENT VIEWS
+# =====================
+
+class ClaimListCreateView(generics.ListCreateAPIView):
+    """
+    List all claims or create a new claim.
+    
+    GET: Return a list of all claims for the authenticated user
+    POST: Create a new claim for a provider
+    """
+    parser_classes = [MultiPartParser, FormParser]
+    
+    def get_permissions(self):
+        """Different permissions for GET vs POST"""
+        if self.request.method == 'POST':
+            return [ClaimCreatePermission()]
+        return [IsAuthenticated()]
+    
+    def get_throttles(self):
+        """Different throttles for GET vs POST"""
+        if self.request.method == 'POST':
+            return [ClaimCreateThrottle()]
+        return [ClaimViewThrottle()]
+    
+    def get_queryset(self):
+        """Return claims based on user role"""
+        user = self.request.user
+        if user.is_staff:
+            # Staff can see all claims
+            return Claim.objects.all().order_by('-created_at')
+        else:
+            # Regular users see only their own claims
+            return Claim.objects.filter(claimant=user).order_by('-created_at')
+    
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return ClaimCreateSerializer
+        return ClaimSerializer
+    
+    def perform_create(self, serializer):
+        """Save the claim and send verification email"""
+        claim = serializer.save()
+        try:
+            send_claim_verification_email(claim)
+        except Exception as e:
+            # Log the error but don't fail the claim creation
+            print(f"Failed to send verification email: {e}")
+            # In production, use proper logging
+            # logger.error(f"Failed to send verification email for claim {claim.id}: {e}")
+
+
+class ClaimDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Retrieve, update or delete a claim instance.
+    
+    Only claimants can update their own claims (before approval)
+    Only staff can update claim status and admin notes
+    """
+    serializer_class = ClaimSerializer
+    permission_classes = [IsAuthenticated, ClaimOwnerPermission]
+    throttle_classes = [ClaimViewThrottle]
+    
+    def get_queryset(self):
+        # Base queryset - ClaimOwnerPermission will handle object-level filtering
+        return Claim.objects.all()
+    
+    def update(self, request, *args, **kwargs):
+        claim = self.get_object()
+        user = request.user
+        
+        # Only allow updates if user is staff or if it's their pending claim
+        if not user.is_staff and (claim.claimant != user or claim.status != 'pending'):
+            return Response(
+                {'error': 'You can only update your own pending claims.'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        return super().update(request, *args, **kwargs)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def verify_claim_email(request, claim_id):
+    """
+    Verify claim email using verification token
+    """
+    try:
+        claim = Claim.objects.get(id=claim_id)
+    except Claim.DoesNotExist:
+        return Response(
+            {'error': 'Claim not found'}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    # Security check: only claimant or staff can verify
+    if claim.claimant != request.user and not request.user.is_staff:
+        return Response(
+            {'error': 'Permission denied. You can only verify your own claims.'}, 
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    token = request.data.get('token')
+    if not token:
+        return Response(
+            {'error': 'Verification token is required'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    if claim.verification_token == token:
+        claim.email_verified = True
+        claim.verification_token = None  # Invalidate token after use
+        claim.save()
+        return Response({'message': 'Email verified successfully'})
+    else:
+        return Response(
+            {'error': 'Invalid verification token'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def unclaimed_providers(request):
+    """
+    Get list of unclaimed providers that can be claimed with enhanced filtering
+    """
+    # Base queryset for unclaimed providers
+    providers = Provider.objects.filter(is_claimed=False, is_active=True).select_related('user')
+    
+    # Search functionality
+    search = request.query_params.get('search')
+    if search:
+        providers = providers.filter(
+            Q(business_name__icontains=search) |
+            Q(description__icontains=search) |
+            Q(email__icontains=search) |
+            Q(phone__icontains=search)
+        )
+    
+    # City filter
+    city = request.query_params.get('city')
+    if city:
+        providers = providers.filter(addresses__city__icontains=city).distinct()
+    
+    # State filter
+    state = request.query_params.get('state')
+    if state:
+        providers = providers.filter(addresses__state__icontains=state).distinct()
+    
+    # Business category filter via services
+    category = request.query_params.get('category')
+    if category:
+        providers = providers.filter(services__category_id=category).distinct()
+    
+    # Verification status filter
+    verified = request.query_params.get('verified')
+    if verified is not None:
+        is_verified = verified.lower() in ['true', '1', 'yes']
+        providers = providers.filter(is_verified=is_verified)
+    
+    # Ordering
+    ordering = request.query_params.get('ordering', '-created_at')
+    valid_orderings = ['business_name', '-business_name', 'created_at', '-created_at', 'updated_at', '-updated_at']
+    if ordering in valid_orderings:
+        providers = providers.order_by(ordering)
+    else:
+        providers = providers.order_by('-created_at')
+    
+    # Count total before pagination for metadata
+    total_count = providers.count()
+    
+    # Add pagination
+    paginator = StandardResultsSetPagination()
+    paginated_providers = paginator.paginate_queryset(providers, request)
+    
+    serializer = ProviderListSerializer(paginated_providers, many=True)
+    
+    # Enhanced response with metadata
+    response_data = paginator.get_paginated_response(serializer.data).data
+    response_data['meta'] = {
+        'total_unclaimed': total_count,
+        'applied_filters': {
+            'search': search,
+            'city': city,
+            'state': state,
+            'category': category,
+            'verified': verified,
+            'ordering': ordering
+        },
+        'filter_options': {
+            'available_cities': list(
+                Provider.objects.filter(is_claimed=False, is_active=True)
+                .values_list('addresses__city', flat=True)
+                .distinct()
+                .exclude(addresses__city__isnull=True)
+                .exclude(addresses__city='')[:50]  # Limit for performance
+            ),
+            'available_states': list(
+                Provider.objects.filter(is_claimed=False, is_active=True)
+                .values_list('addresses__state', flat=True)
+                .distinct()
+                .exclude(addresses__state__isnull=True)
+                .exclude(addresses__state='')
+            ),
+            'ordering_options': [
+                {'value': 'business_name', 'label': 'Business Name (A-Z)'},
+                {'value': '-business_name', 'label': 'Business Name (Z-A)'},
+                {'value': 'created_at', 'label': 'Oldest First'},
+                {'value': '-created_at', 'label': 'Newest First'},
+                {'value': 'updated_at', 'label': 'Recently Updated'},
+                {'value': '-updated_at', 'label': 'Least Recently Updated'}
+            ]
+        }
+    }
+    
+    return Response(response_data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def approve_claim(request, claim_id):
+    """
+    Admin endpoint to approve a claim
+    """
+    if not request.user.is_staff:
+        return Response(
+            {'error': 'Only staff can approve claims'}, 
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    try:
+        claim = Claim.objects.get(id=claim_id)
+    except Claim.DoesNotExist:
+        return Response(
+            {'error': 'Claim not found'}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    admin_notes = request.data.get('admin_notes', '')
+    
+    try:
+        success = approve_claim_util(claim, request.user, admin_notes)
+        if success:
+            return Response({
+                'message': 'Claim approved successfully',
+                'claim': ClaimSerializer(claim).data
+            })
+        else:
+            return Response(
+                {'error': 'Failed to approve claim. It may already be claimed or in invalid state.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    except Exception as e:
+        return Response(
+            {'error': f'Error approving claim: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def reject_claim(request, claim_id):
+    """
+    Admin endpoint to reject a claim
+    """
+    if not request.user.is_staff:
+        return Response(
+            {'error': 'Only staff can reject claims'}, 
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    try:
+        claim = Claim.objects.get(id=claim_id)
+    except Claim.DoesNotExist:
+        return Response(
+            {'error': 'Claim not found'}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    admin_notes = request.data.get('admin_notes', '')
+    
+    try:
+        success = reject_claim_util(claim, request.user, admin_notes)
+        if success:
+            return Response({
+                'message': 'Claim rejected',
+                'claim': ClaimSerializer(claim).data
+            })
+        else:
+            return Response(
+                {'error': 'Failed to reject claim. It may be in invalid state.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    except Exception as e:
+        return Response(
+            {'error': f'Error rejecting claim: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

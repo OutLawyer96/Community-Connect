@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import Navbar from './components/Layout/Navbar';
 import Footer from './components/Layout/Footer';
 import Home from './pages/Home';
@@ -10,31 +11,74 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import PrivateRoute from './components/Auth/PrivateRoute';
+import AdminRoute from './components/Auth/AdminRoute';
+// Claim System Components
+import UnclaimedProviders from './pages/UnclaimedProviders';
+import ClaimForm from './pages/ClaimForm';
+import MyClaims from './pages/MyClaims';
+import ClaimDetail from './pages/ClaimDetail';
+import AdminClaimManager from './pages/AdminClaimManager';
 
 function App() {
   return (
     <AuthProvider>
-      <div className="min-h-screen bg-gray-50 flex flex-col">
-        <Navbar />
-        <main className="flex-grow">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/providers" element={<Providers />} />
-            <Route path="/providers/:id" element={<ProviderDetail />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route 
-              path="/dashboard" 
-              element={
-                <PrivateRoute>
-                  <Dashboard />
-                </PrivateRoute>
-              } 
-            />
-          </Routes>
-        </main>
-        <Footer />
-      </div>
+      <NotificationProvider>
+        <div className="min-h-screen bg-gray-50 flex flex-col">
+          <Navbar />
+          <main className="flex-grow">
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/providers" element={<Providers />} />
+              <Route path="/providers/:id" element={<ProviderDetail />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route 
+                path="/dashboard" 
+                element={
+                  <PrivateRoute>
+                    <Dashboard />
+                  </PrivateRoute>
+                } 
+              />
+              {/* Claim System Routes */}
+              <Route path="/claim-business" element={<UnclaimedProviders />} />
+              <Route 
+                path="/claim-business/:providerId" 
+                element={
+                  <PrivateRoute>
+                    <ClaimForm />
+                  </PrivateRoute>
+                } 
+              />
+              <Route 
+                path="/my-claims" 
+                element={
+                  <PrivateRoute>
+                    <MyClaims />
+                  </PrivateRoute>
+                } 
+              />
+              <Route 
+                path="/my-claims/:claimId" 
+                element={
+                  <PrivateRoute>
+                    <ClaimDetail />
+                  </PrivateRoute>
+                } 
+              />
+              <Route 
+                path="/admin/claims" 
+                element={
+                  <AdminRoute>
+                    <AdminClaimManager />
+                  </AdminRoute>
+                } 
+              />
+            </Routes>
+          </main>
+          <Footer />
+        </div>
+      </NotificationProvider>
     </AuthProvider>
   );
 }

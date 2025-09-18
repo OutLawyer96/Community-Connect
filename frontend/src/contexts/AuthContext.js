@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from '../config/axios';
+import API_CONFIG from '../config/api';
 
 const AuthContext = createContext({});
 
@@ -11,27 +12,16 @@ export function useAuth() {
   return context;
 }
 
-const API_BASE_URL = 'http://localhost:8000/api';
-
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
 
-  // Configure axios defaults
-  useEffect(() => {
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Token ${token}`;
-    } else {
-      delete axios.defaults.headers.common['Authorization'];
-    }
-  }, [token]);
-
   // Check if user is logged in on app start
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/auth/dashboard/`);
+        const response = await apiClient.get(API_CONFIG.ENDPOINTS.DASHBOARD);
         setCurrentUser(response.data.user);
       } catch (error) {
         console.error('Error fetching user data:', error);
@@ -50,7 +40,7 @@ export function AuthProvider({ children }) {
 
   const login = async (username, password) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/login/`, {
+      const response = await apiClient.post(API_CONFIG.ENDPOINTS.LOGIN, {
         username,
         password
       });
@@ -71,7 +61,7 @@ export function AuthProvider({ children }) {
 
   const register = async (userData) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/register/`, userData);
+      const response = await apiClient.post(API_CONFIG.ENDPOINTS.REGISTER, userData);
       
       const { user, token: authToken } = response.data;
       setCurrentUser(user);
@@ -89,14 +79,13 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     try {
-      await axios.post(`${API_BASE_URL}/auth/logout/`);
+      await apiClient.post(API_CONFIG.ENDPOINTS.LOGOUT);
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
       setCurrentUser(null);
       setToken(null);
       localStorage.removeItem('token');
-      delete axios.defaults.headers.common['Authorization'];
     }
   };
 

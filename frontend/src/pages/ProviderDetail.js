@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import axios from 'axios';
 import { 
   Star, MapPin, Phone, Mail, Globe, Clock, Shield, 
   ThumbsUp, MessageCircle, Calendar, User, ArrowLeft,
   Award, CheckCircle, Heart, Share2
 } from 'lucide-react';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+import apiClient from '../config/axios';
+import API_CONFIG, { APP_CONFIG } from '../config/api';
 
 function ProviderDetail() {
   const { id } = useParams();

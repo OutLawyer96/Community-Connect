@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { APP_CONFIG } from '../config/api';
 
 // Fix for default markers in React Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -12,8 +13,8 @@ L.Icon.Default.mergeOptions({
 });
 
 const ProvidersMap = ({ providers = [] }) => {
-  const [mapCenter, setMapCenter] = useState([20.5937, 78.9629]); // Center of India
-  const [mapZoom, setMapZoom] = useState(5);
+  const [mapCenter, setMapCenter] = useState([APP_CONFIG.MAP.DEFAULT_CENTER.lat, APP_CONFIG.MAP.DEFAULT_CENTER.lng]);
+  const [mapZoom, setMapZoom] = useState(APP_CONFIG.MAP.DEFAULT_ZOOM);
 
   // Custom marker icon for providers
   const providerIcon = new L.Icon({
@@ -43,7 +44,7 @@ const ProvidersMap = ({ providers = [] }) => {
         className="z-0"
       >
         <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          url={APP_CONFIG.MAP.TILE_URL}
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
         

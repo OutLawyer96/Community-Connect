@@ -34,8 +34,16 @@ class Category(models.Model):
         ordering = ['name']
 
 class Provider(models.Model):
-    # This creates a one-to-one link to the User model, making it a profile
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, primary_key=True)
+    # Implicit id field will be added automatically as BigAutoField PK
+    # This creates a one-to-one link to the User model, but allows null for unclaimed listings
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL,
+        null=True, 
+        blank=True, 
+        unique=True,
+        help_text="The user who owns this provider account (null for unclaimed listings)"
+    )
     business_name = models.CharField(max_length=150)
     description = models.TextField(blank=True, null=True)
     phone = models.CharField(max_length=20, blank=True, null=True)
@@ -46,6 +54,7 @@ class Provider(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     is_verified = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
+    is_claimed = models.BooleanField(default=False)  # Default False for new providers (unclaimed)
 
     def __str__(self):
         return self.business_name
@@ -58,6 +67,54 @@ class Provider(models.Model):
     @property
     def review_count(self):
         return self.reviews.count()
+
+
+class Claim(models.Model):
+    """Model for business owners to claim their provider listings"""
+    CLAIM_STATUS_CHOICES = [
+        ('pending', 'Pending Review'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('under_review', 'Under Review'),
+    ]
+    
+    provider = models.ForeignKey(Provider, on_delete=models.CASCADE, related_name='claims')
+    claimant = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='claims')
+    business_documents = models.FileField(upload_to='claim_documents/', blank=True, null=True)
+    additional_info = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=20, choices=CLAIM_STATUS_CHOICES, default='pending')
+    admin_notes = models.TextField(blank=True, null=True)  # For admin review notes
+    verification_token = models.CharField(max_length=100, blank=True, null=True)  # For email verification
+    email_verified = models.BooleanField(default=False)
+    # Phone verification fields
+    phone_verification_code = models.CharField(max_length=10, blank=True, null=True)
+    phone_verified = models.BooleanField(default=False)
+    phone_verification_sent_at = models.DateTimeField(null=True, blank=True)
+    phone_verification_deferred = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='reviewed_claims'
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        # Allow duplicate claims only if previous claims were rejected
+        constraints = [
+            models.UniqueConstraint(
+                fields=['provider', 'claimant'],
+                condition=models.Q(status__in=['pending', 'approved']),
+                name='unique_active_claim_per_user_provider'
+            )
+        ]
+
+    def __str__(self):
+        return f"Claim for {self.provider.business_name} by {self.claimant.username}"
+
 
 class Service(models.Model):
     provider = models.ForeignKey(Provider, on_delete=models.CASCADE, related_name='services')
