@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { Menu, X, User, LogOut, Home, Users, Search, Building2, FileText, Shield } from 'lucide-react';
+import { Menu, X, User, LogOut, Home, Users, Building2, FileText, Shield, Bell } from 'lucide-react';
 import Logo from './Logo';
+import { useNotifications } from '../../contexts/NotificationContext';
 // Import your logo (uncomment and adjust the path based on your logo file)
 // import logo from '../../assets/images/logo.png'; // or .svg, .jpg
 
@@ -10,6 +11,19 @@ function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
+  const { unreadCount, history, markAsRead, markAllAsRead } = useNotifications();
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const notifRef = useRef(null);
+
+  useEffect(() => {
+    const onClickOutside = (e) => {
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setIsNotifOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -52,6 +66,65 @@ function Navbar() {
             
             {currentUser ? (
               <div className="flex items-center space-x-4">
+                {/* Notifications */}
+                <div className="relative" ref={notifRef}>
+                  <button
+                    className="relative p-2 rounded-full hover:bg-gray-100 focus:outline-none"
+                    aria-label={`Notifications (${unreadCount} unread)`}
+                    onClick={() => setIsNotifOpen((v) => !v)}
+                  >
+                    <Bell className="w-5 h-5 text-gray-700" />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 bg-red-600 text-white text-[10px] leading-none px-1.5 py-0.5 rounded-full">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                    )}
+                  </button>
+                  {isNotifOpen && (
+                    <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden z-50">
+                      <div className="flex items-center justify-between px-3 py-2 border-b">
+                        <span className="text-sm font-semibold">Notifications</span>
+                        {unreadCount > 0 && (
+                          <button
+                            onClick={() => markAllAsRead()}
+                            className="text-xs text-blue-600 hover:underline"
+                          >
+                            Mark all as read
+                          </button>
+                        )}
+                      </div>
+                      <ul className="max-h-96 overflow-auto divide-y">
+                        {(history || []).slice(0, 15).map((n) => (
+                          <li key={n.id} className={`px-3 py-2 text-sm ${n.read ? 'bg-white' : 'bg-blue-50'}`}>
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                {n.title && <div className="font-medium text-gray-900">{n.title}</div>}
+                                <div className="text-gray-700">{n.message}</div>
+                                <div className="text-xs text-gray-500 mt-1">{new Date(n.createdAt).toLocaleString()}</div>
+                              </div>
+                              {!n.read && (
+                                <button
+                                  className="text-xs text-blue-600 hover:underline flex-shrink-0"
+                                  onClick={() => markAsRead(n.id)}
+                                >
+                                  Mark read
+                                </button>
+                              )}
+                            </div>
+                          </li>
+                        ))}
+                        {(!history || history.length === 0) && (
+                          <li className="px-3 py-6 text-sm text-center text-gray-500">No notifications yet</li>
+                        )}
+                      </ul>
+                      <div className="px-3 py-2 text-right border-t">
+                        <Link to="/my-claims" className="text-sm text-blue-600 hover:underline" onClick={() => setIsNotifOpen(false)}>
+                          View my claims
+                        </Link>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <Link 
                   to="/dashboard" 
                   className="flex items-center text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium transition-colors"

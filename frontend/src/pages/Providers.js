@@ -1,57 +1,84 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Search, Filter, MapPin, Star, Clock, DollarSign, Grid, List, Map } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Search, Filter, MapPin, Star, Clock, Grid, List, Map, DollarSign } from 'lucide-react';
 import apiClient from '../config/axios';
 import API_CONFIG, { APP_CONFIG } from '../config/api';
 import ProvidersMap from '../components/Map';
 import SearchFilters from '../components/SearchFilters';
-import Pagination from '../components/Pagination';
+import { ProviderClaimStatus } from '../components/claims/ClaimStatusBadge';
 
 function Providers() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [providers, setProviders] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('grid'); // 'grid', 'list', 'map'
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
-  const [filters, setFilters] = useState({
-    search: '',
-    category: '',
-    city: '',
-    min_rating: ''
-  });
+  const [currentPage] = useState(1);
+  const [filters, setFilters] = useState(() => ({
+    search: searchParams.get('search') || '',
+    category: searchParams.get('category') || '',
+    city: searchParams.get('city') || '',
+    min_rating: searchParams.get('min_rating') || '',
+    status: searchParams.get('status') || '',
+    lat: searchParams.get('lat') ? parseFloat(searchParams.get('lat')) : null,
+    lng: searchParams.get('lng') ? parseFloat(searchParams.get('lng')) : null,
+    radius: searchParams.get('radius') ? parseFloat(searchParams.get('radius')) : null,
+    min_price: searchParams.get('min_price') ? parseFloat(searchParams.get('min_price')) : null,
+    max_price: searchParams.get('max_price') ? parseFloat(searchParams.get('max_price')) : null,
+    available_at: searchParams.get('available_at') || '',
+    available_today: searchParams.get('available_today') === 'true',
+    verified_only: searchParams.get('verified_only') === 'true',
+    ordering: searchParams.get('ordering') || '',
+  }));
+  const abortRef = useRef(null);
 
-  useEffect(() => {
-    fetchProviders();
-    fetchCategories();
-  }, [filters, currentPage]);
-
-  const fetchProviders = async () => {
+  const fetchProviders = React.useCallback(async () => {
     try {
       setLoading(true);
+      // cancel any in-flight request
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
       const params = new URLSearchParams();
+      
       Object.entries(filters).forEach(([key, value]) => {
-        if (value) params.append(key, value);
+        if (value === null || value === undefined || value === '') return;
+        
+        if (key === 'status') {
+          if (value === 'claimed') params.append('is_claimed', 'true');
+          else if (value === 'unclaimed') params.append('is_claimed', 'false');
+        } else if (key === 'radius') {
+          // Only send radius if both lat and lng exist
+          if (filters.lat && filters.lng) {
+            // Convert miles to kilometers for backend (backend expects km)
+            const radiusKm = Math.round(value * 1.60934);
+            params.append('radius', radiusKm);
+          }
+        } else if (key === 'available_today' || key === 'verified_only') {
+          if (value === true) params.append(key, 'true');
+        } else {
+          params.append(key, value);
+        }
       });
+      
       params.append('page', currentPage);
       params.append('page_size', APP_CONFIG.DEFAULT_PAGE_SIZE);
       
-      const response = await apiClient.get(`${API_CONFIG.ENDPOINTS.PROVIDERS}?${params}`);
+      const response = await apiClient.get(`${API_CONFIG.ENDPOINTS.PROVIDERS}?${params}`, { signal: controller.signal });
       const data = response.data;
       
       setProviders(data.results || data || []);
-      setTotalPages(Math.ceil((data.count || data.length || 0) / APP_CONFIG.DEFAULT_PAGE_SIZE));
-      setTotalItems(data.count || data.length || 0);
     } catch (error) {
+      if (error?.name === 'AbortError') return;
       console.error('Error fetching providers:', error);
       setProviders([]); // Set empty array as fallback
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters, currentPage]);
 
-  const fetchCategories = async () => {
+  const fetchCategories = React.useCallback(async () => {
     try {
       const response = await apiClient.get(API_CONFIG.ENDPOINTS.CATEGORIES);
       setCategories(response.data.results || response.data);
@@ -59,13 +86,54 @@ function Providers() {
       console.error('Error fetching categories:', error);
       setCategories([]); // Set empty array as fallback
     }
-  };
+  }, []);
 
-  const handleFilterChange = (key, value) => {
-    setFilters(prev => ({
-      ...prev,
-      [key]: value
-    }));
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
+
+  // React to URL parameter changes for back/forward navigation
+  useEffect(() => {
+    const incoming = {
+      search: searchParams.get('search') || '',
+      category: searchParams.get('category') || '',
+      city: searchParams.get('city') || '',
+      min_rating: searchParams.get('min_rating') || '',
+      status: searchParams.get('status') || '',
+      lat: searchParams.get('lat') ? parseFloat(searchParams.get('lat')) : null,
+      lng: searchParams.get('lng') ? parseFloat(searchParams.get('lng')) : null,
+      radius: searchParams.get('radius') ? parseFloat(searchParams.get('radius')) : null,
+      min_price: searchParams.get('min_price') ? parseFloat(searchParams.get('min_price')) : null,
+      max_price: searchParams.get('max_price') ? parseFloat(searchParams.get('max_price')) : null,
+      available_at: searchParams.get('available_at') || '',
+      available_today: searchParams.get('available_today') === 'true',
+      verified_only: searchParams.get('verified_only') === 'true',
+      ordering: searchParams.get('ordering') || '',
+    };
+    setFilters(prev => {
+      const changed = Object.keys(incoming).some(k => prev[k] !== incoming[k]);
+      return changed ? { ...prev, ...incoming } : prev;
+    });
+  }, [searchParams]);
+
+  // Fetch providers whenever filters change
+  useEffect(() => {
+    fetchProviders();
+  }, [fetchProviders]);
+
+  // Keep URL in sync with filters for bookmarkable results
+  useEffect(() => {
+    const params = {};
+    Object.entries(filters).forEach(([k, v]) => {
+      if (v !== null && v !== undefined && v !== '' && v !== false) {
+        params[k] = v;
+      }
+    });
+    setSearchParams(params); // push into history
+  }, [filters, setSearchParams]);
+
+  const handleSearchFilters = (newFilters) => {
+    setFilters(prev => ({ ...prev, ...newFilters }));
   };
 
   const clearFilters = () => {
@@ -73,7 +141,17 @@ function Providers() {
       search: '',
       category: '',
       city: '',
-      min_rating: ''
+      min_rating: '',
+      status: '',
+      lat: null,
+      lng: null,
+      radius: null,
+      min_price: null,
+      max_price: null,
+      available_at: '',
+      available_today: false,
+      verified_only: false,
+      ordering: '',
     });
   };
 
@@ -90,6 +168,7 @@ function Providers() {
             </p>
           </div>
           <div className="flex items-center ml-4">
+            <ProviderClaimStatus provider={provider} compact />
             {provider.average_rating ? (
               <div className="flex items-center bg-warning-50 px-2 py-1 rounded-lg">
                 <Star className="w-4 h-4 text-warning-500 fill-current mr-1" />
@@ -108,6 +187,11 @@ function Providers() {
             <div className="flex items-center text-gray-600 text-sm">
               <MapPin className="w-4 h-4 mr-2" />
               {provider.primary_address.city}, {provider.primary_address.state}
+              {provider.distance != null && provider.distance !== 999999 && (
+                <span className="ml-2 text-primary-600 font-medium">
+                  ({provider.distance.toFixed(1)} km away)
+                </span>
+              )}
             </div>
           )}
           
@@ -115,15 +199,48 @@ function Providers() {
             <Clock className="w-4 h-4 mr-2" />
             {provider.review_count} reviews
           </div>
+
+          {/* Price Range Display */}
+          {(provider.min_service_price != null || provider.max_service_price != null) && (
+            <div className="flex items-center text-gray-600 text-sm">
+              <DollarSign className="w-4 h-4 mr-2" />
+              <span>
+                {provider.min_service_price && provider.max_service_price ? (
+                  provider.min_service_price === provider.max_service_price ? (
+                    `$${provider.min_service_price}`
+                  ) : (
+                    `$${provider.min_service_price} - $${provider.max_service_price}`
+                  )
+                ) : provider.min_service_price ? (
+                  `From $${provider.min_service_price}`
+                ) : (
+                  `Up to $${provider.max_service_price}`
+                )}
+                {provider.avg_service_price && (
+                  <span className="text-gray-500 ml-1">
+                    (avg: ${provider.avg_service_price.toFixed(0)})
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-between">
           <Link
-            to={`/providers/${provider.user}`}
+            to={`/providers/${provider.id}`}
             className="bg-gradient-to-r from-primary-500 to-secondary-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg transition-all transform hover:scale-105"
           >
             View Details
           </Link>
+          {!provider.is_claimed && (
+            <button
+              onClick={() => navigate(`/claim-business/${provider.id}`, { state: { provider } })}
+              className="text-white bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded-lg text-sm"
+            >
+              Claim
+            </button>
+          )}
           <button className="text-gray-400 hover:text-red-500 transition-colors">
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
@@ -161,17 +278,41 @@ function Providers() {
               <div className="flex items-center">
                 <MapPin className="w-4 h-4 mr-1" />
                 {provider.primary_address.city}, {provider.primary_address.state}
+                {provider.distance != null && provider.distance !== 999999 && (
+                  <span className="ml-2 text-primary-600 font-medium">
+                    ({provider.distance.toFixed(1)} km away)
+                  </span>
+                )}
               </div>
             )}
             <div className="flex items-center">
               <Clock className="w-4 h-4 mr-1" />
               {provider.review_count} reviews
             </div>
+            {/* Price Range Display */}
+            {(provider.min_service_price != null || provider.max_service_price != null) && (
+              <div className="flex items-center">
+                <DollarSign className="w-4 h-4 mr-1" />
+                <span>
+                  {provider.min_service_price && provider.max_service_price ? (
+                    provider.min_service_price === provider.max_service_price ? (
+                      `$${provider.min_service_price}`
+                    ) : (
+                      `$${provider.min_service_price} - $${provider.max_service_price}`
+                    )
+                  ) : provider.min_service_price ? (
+                    `From $${provider.min_service_price}`
+                  ) : (
+                    `Up to $${provider.max_service_price}`
+                  )}
+                </span>
+              </div>
+            )}
           </div>
         </div>
         
         <Link
-          to={`/providers/${provider.user}`}
+          to={`/providers/${provider.id}`}
           className="bg-gradient-to-r from-primary-500 to-secondary-500 text-white px-6 py-2 rounded-lg font-medium hover:shadow-lg transition-all transform hover:scale-105"
         >
           View Details
@@ -189,84 +330,33 @@ function Providers() {
             Find Service Providers
           </h1>
           
-          {/* Filters */}
-          <div className="bg-gray-50 rounded-xl p-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                  type="text"
-                  placeholder="Search services..."
-                  value={filters.search}
-                  onChange={(e) => handleFilterChange('search', e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-              </div>
-              
-              <select
-                value={filters.category}
-                onChange={(e) => handleFilterChange('category', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              >
-                <option value="">All Categories</option>
-                {(categories || []).map(category => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-              
-              <input
-                type="text"
-                placeholder="City"
-                value={filters.city}
-                onChange={(e) => handleFilterChange('city', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              />
-              
-              <select
-                value={filters.min_rating}
-                onChange={(e) => handleFilterChange('min_rating', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              >
-                <option value="">Any Rating</option>
-                <option value="4">4+ Stars</option>
-                <option value="3">3+ Stars</option>
-                <option value="2">2+ Stars</option>
-              </select>
-            </div>
-            
-            <div className="flex items-center justify-between">
-              <button
-                onClick={clearFilters}
-                className="text-sm text-gray-600 hover:text-gray-900 flex items-center"
-              >
-                <Filter className="w-4 h-4 mr-1" />
-                Clear Filters
-              </button>
-              
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-600">View:</span>
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`p-2 rounded-lg ${viewMode === 'grid' ? 'bg-primary-100 text-primary-600' : 'text-gray-400 hover:text-gray-600'}`}
-                >
-                  <Grid className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`p-2 rounded-lg ${viewMode === 'list' ? 'bg-primary-100 text-primary-600' : 'text-gray-400 hover:text-gray-600'}`}
-                >
-                  <List className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setViewMode('map')}
-                  className={`p-2 rounded-lg ${viewMode === 'map' ? 'bg-primary-100 text-primary-600' : 'text-gray-400 hover:text-gray-600'}`}
-                >
-                  <Map className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+          {/* Advanced Search Filters */}
+          <SearchFilters 
+            categories={categories}
+            onSearch={handleSearchFilters}
+          />
+          
+          {/* View Mode Controls */}
+          <div className="flex items-center justify-end space-x-2 mt-4">
+            <span className="text-sm text-gray-600">View:</span>
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-2 rounded-lg ${viewMode === 'grid' ? 'bg-primary-100 text-primary-600' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+              <Grid className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-2 rounded-lg ${viewMode === 'list' ? 'bg-primary-100 text-primary-600' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+              <List className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('map')}
+              className={`p-2 rounded-lg ${viewMode === 'map' ? 'bg-primary-100 text-primary-600' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+              <Map className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getUnclaimedProviders } from '../../services/claimsService';
-import { ProviderClaimStatus } from './ClaimStatusBadge';
+import { getUnclaimedProviders } from '../services/claimsService';
+import { ProviderClaimStatus } from '../components/claims/ClaimStatusBadge';
 
 /**
  * UnclaimedProviders Component

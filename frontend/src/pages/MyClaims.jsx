@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { getUserClaims } from '../services/claimsService';
-import { ClaimStatusBadge, ClaimProgressSteps } from '../components/claims/ClaimStatusBadge';
+import { getMyClaims } from '../services/claimsService';
+import ClaimStatusBadge, { ClaimProgressSteps } from '../components/claims/ClaimStatusBadge';
 import { useAuth } from '../contexts/AuthContext';
 
 /**
@@ -9,11 +9,14 @@ import { useAuth } from '../contexts/AuthContext';
  * Page for users to view and manage their submitted claims
  */
 const MyClaims = () => {
-  const { user } = useAuth();
+  useAuth(); // initialize auth context
   const [claims, setClaims] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState('all'); // all, pending, approved, rejected
+  const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState(''); // yyyy-mm-dd
+  const [dateTo, setDateTo] = useState(''); // yyyy-mm-dd
 
   useEffect(() => {
     fetchUserClaims();
@@ -22,7 +25,7 @@ const MyClaims = () => {
   const fetchUserClaims = async () => {
     try {
       setLoading(true);
-      const response = await getUserClaims();
+      const response = await getMyClaims();
       setClaims(response.results || response);
     } catch (err) {
       setError('Failed to load your claims. Please try again.');
@@ -32,12 +35,54 @@ const MyClaims = () => {
     }
   };
 
-  // Filter claims based on selected filter
-  const filteredClaims = claims.filter(claim => {
-    if (filter === 'all') return true;
-    if (filter === 'pending') return ['pending', 'under_review'].includes(claim.status);
-    return claim.status === filter;
-  });
+  // Helpers
+  const normalize = (s) => (s || '').toString().toLowerCase();
+  const parseDate = (d) => (d ? new Date(d) : null);
+  const dateWithin = useCallback((createdAt) => {
+    const created = new Date(createdAt);
+    if (Number.isNaN(created.getTime())) return false;
+    const from = parseDate(dateFrom);
+    const to = parseDate(dateTo);
+    if (from && created < new Date(from.getFullYear(), from.getMonth(), from.getDate())) return false;
+    if (to) {
+      // include entire end day
+      const end = new Date(to.getFullYear(), to.getMonth(), to.getDate() + 1);
+      if (created >= end) return false;
+    }
+    return true;
+  }, [dateFrom, dateTo]);
+
+  // Filter claims based on selected filter + search + date range
+  const filteredClaims = useMemo(() => {
+    const q = normalize(search);
+    return claims.filter((claim) => {
+      // status filter via tabs
+      if (filter !== 'all') {
+        if (filter === 'pending') {
+          if (!['pending', 'under_review'].includes(claim.status)) return false;
+        } else if (claim.status !== filter) {
+          return false;
+        }
+      }
+
+      // date range (created_at)
+      if ((dateFrom || dateTo) && !dateWithin(claim.created_at)) return false;
+
+      // search across business name and admin notes / additional info
+      if (q) {
+        const hay = [
+          claim.provider?.business_name,
+          claim.admin_notes,
+          claim.additional_info,
+        ]
+          .map(normalize)
+          .join(' ');
+        if (!hay.includes(q)) return false;
+      }
+
+      return true;
+    });
+  }, [claims, filter, search, dateFrom, dateTo, dateWithin]);
 
   // Group claims by status for statistics
   const claimStats = claims.reduce((acc, claim) => {
@@ -47,18 +92,59 @@ const MyClaims = () => {
 
   const getStatusCount = (status) => claimStats[status] || 0;
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 py-8">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading your claims...</p>
+  const exportCsv = useCallback(() => {
+    const rows = [
+      ['ID', 'Business', 'Status', 'Submitted', 'Reviewed At', 'Admin Notes'],
+      ...filteredClaims.map((c) => [
+        c.id,
+        c.provider?.business_name || '',
+        c.status,
+        c.created_at,
+        c.reviewed_at || '',
+        (c.admin_notes || '').replace(/\s+/g, ' ').trim(),
+      ]),
+    ];
+
+    const csv = rows
+      .map((r) => r
+        .map((v) => {
+          const s = String(v ?? '');
+          // escape quotes, wrap if needed
+          const escaped = '"' + s.replace(/"/g, '""') + '"';
+          return /[",\n]/.test(s) ? escaped : s;
+        })
+        .join(','))
+      .join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    a.download = `my-claims-${ts}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [filteredClaims]);
+
+  const SkeletonCard = () => (
+    <div className="bg-white rounded-lg shadow-md overflow-hidden animate-pulse">
+      <div className="p-6">
+        <div className="flex justify-between items-start mb-4">
+          <div className="flex-1">
+            <div className="h-6 bg-gray-200 rounded w-1/3 mb-2" />
+            <div className="h-4 bg-gray-200 rounded w-1/2 mb-1" />
+            <div className="h-3 bg-gray-200 rounded w-1/4" />
           </div>
+          <div className="ml-6 w-24 h-6 bg-gray-200 rounded" />
         </div>
+        <div className="h-3 bg-gray-200 rounded w-full mb-2" />
+        <div className="h-3 bg-gray-200 rounded w-5/6 mb-2" />
+        <div className="h-3 bg-gray-200 rounded w-2/3" />
       </div>
-    );
-  }
+    </div>
+  );
 
   if (error) {
     return (
@@ -104,6 +190,65 @@ const MyClaims = () => {
             </svg>
             Claim New Business
           </Link>
+        </div>
+
+        {/* Actions + Advanced Filters */}
+        <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+            <div className="flex gap-3">
+              <button
+                onClick={exportCsv}
+                disabled={filteredClaims.length === 0}
+                className={`px-4 py-2 rounded-lg text-white transition-colors ${filteredClaims.length === 0 ? 'bg-gray-300 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
+                aria-disabled={filteredClaims.length === 0}
+              >
+                Export CSV
+              </button>
+              <button
+                onClick={fetchUserClaims}
+                className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800 transition-colors"
+              >
+                Refresh
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 w-full md:w-auto">
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search business or notes..."
+                className="border rounded-lg px-3 py-2 w-full"
+                aria-label="Search claims"
+              />
+              <div className="flex items-center gap-2">
+                <label htmlFor="date-from" className="text-sm text-gray-600 whitespace-nowrap">From</label>
+                <input
+                  id="date-from"
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="border rounded-lg px-3 py-2 w-full"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label htmlFor="date-to" className="text-sm text-gray-600 whitespace-nowrap">To</label>
+                <input
+                  id="date-to"
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="border rounded-lg px-3 py-2 w-full"
+                />
+              </div>
+              <button
+                onClick={() => { setSearch(''); setDateFrom(''); setDateTo(''); }}
+                className="px-4 py-2 rounded-lg bg-white border hover:bg-gray-50 text-gray-700"
+                aria-label="Clear filters"
+              >
+                Clear Filters
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Statistics Cards */}
@@ -175,7 +320,8 @@ const MyClaims = () => {
                 { key: 'all', label: 'All Claims', count: claims.length },
                 { key: 'pending', label: 'Pending', count: getStatusCount('pending') + getStatusCount('under_review') },
                 { key: 'approved', label: 'Approved', count: getStatusCount('approved') },
-                { key: 'rejected', label: 'Rejected', count: getStatusCount('rejected') }
+                { key: 'rejected', label: 'Rejected', count: getStatusCount('rejected') },
+                { key: 'withdrawn', label: 'Withdrawn', count: getStatusCount('withdrawn') }
               ].map((tab) => (
                 <button
                   key={tab.key}
@@ -207,7 +353,13 @@ const MyClaims = () => {
         </div>
 
         {/* Claims List */}
-        {filteredClaims.length === 0 ? (
+        {loading ? (
+          <div className="space-y-6">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+        ) : filteredClaims.length === 0 ? (
           <div className="bg-white rounded-lg shadow-md p-12 text-center">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -258,9 +410,9 @@ const MyClaims = () => {
                     </div>
                     <div className="ml-6 text-right">
                       <ClaimStatusBadge status={claim.status} />
-                      {claim.status === 'under_review' && claim.reviewed_at && (
+                      {claim.status === 'under_review' && claim.updated_at && (
                         <p className="text-xs text-gray-500 mt-1">
-                          Under review since {new Date(claim.reviewed_at).toLocaleDateString()}
+                          Under review since {new Date(claim.updated_at).toLocaleDateString()}
                         </p>
                       )}
                     </div>

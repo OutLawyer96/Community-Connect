@@ -5,7 +5,7 @@ import { getClaimStatusColor, getClaimStatusLabel } from '../../services/claimsS
  * ClaimStatusBadge Component
  * Displays a colored badge indicating the current status of a claim
  */
-const ClaimStatusBadge = ({ status, size = 'md', showIcon = true }) => {
+const ClaimStatusBadge = ({ status, size = 'md', showIcon = true, announce = false, ariaLabel }) => {
   const sizeClasses = {
     sm: 'px-2 py-1 text-xs',
     md: 'px-3 py-1 text-sm',
@@ -45,14 +45,23 @@ const ClaimStatusBadge = ({ status, size = 'md', showIcon = true }) => {
     }
   };
 
+  const label = getClaimStatusLabel(status);
+  const a11y = announce
+    ? { role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true', 'aria-label': ariaLabel || `Claim status: ${label}` }
+    : { 'aria-label': ariaLabel || `Claim status: ${label}` };
   return (
-    <span className={`
+    <span
+      {...a11y}
+      title={label}
+      data-status={status}
+      className={`
       inline-flex items-center gap-1 font-medium rounded-full
       ${getClaimStatusColor(status)}
       ${sizeClasses[size]}
-    `}>
+    `}
+    >
       {showIcon && getStatusIcon(status)}
-      {getClaimStatusLabel(status)}
+      {label}
     </span>
   );
 };
@@ -132,12 +141,14 @@ export const ProviderClaimStatus = ({ provider, compact = false }) => {
  * ClaimProgressSteps Component
  * Shows the progress of a claim through the workflow
  */
-export const ClaimProgressSteps = ({ claim }) => {
+export const ClaimProgressSteps = ({ claim, status, emailVerified }) => {
+  const st = status || claim?.status;
+  const ev = typeof emailVerified === 'boolean' ? emailVerified : !!claim?.email_verified;
   const steps = [
     { key: 'submitted', label: 'Submitted', completed: true },
-    { key: 'email_verified', label: 'Email Verified', completed: claim.email_verified },
-    { key: 'under_review', label: 'Under Review', completed: ['under_review', 'approved', 'rejected'].includes(claim.status) },
-    { key: 'completed', label: 'Completed', completed: ['approved', 'rejected'].includes(claim.status) }
+    { key: 'email_verified', label: 'Email Verified', completed: ev },
+    { key: 'under_review', label: 'Under Review', completed: ['under_review', 'approved', 'rejected'].includes(st) },
+    { key: 'completed', label: 'Completed', completed: ['approved', 'rejected'].includes(st) }
   ];
 
   return (

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -13,8 +13,8 @@ L.Icon.Default.mergeOptions({
 });
 
 const ProvidersMap = ({ providers = [] }) => {
-  const [mapCenter, setMapCenter] = useState([APP_CONFIG.MAP.DEFAULT_CENTER.lat, APP_CONFIG.MAP.DEFAULT_CENTER.lng]);
-  const [mapZoom, setMapZoom] = useState(APP_CONFIG.MAP.DEFAULT_ZOOM);
+  const [mapCenter] = useState([APP_CONFIG.MAP.DEFAULT_CENTER.lat, APP_CONFIG.MAP.DEFAULT_CENTER.lng]);
+  const [mapZoom] = useState(APP_CONFIG.MAP.DEFAULT_ZOOM);
 
   // Custom marker icon for providers
   const providerIcon = new L.Icon({

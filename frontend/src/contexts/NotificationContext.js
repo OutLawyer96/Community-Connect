@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
+import { getMyClaims } from '../services/claimsService';
 
 /**
  * NotificationContext
@@ -21,8 +22,29 @@ export const useNotifications = () => {
  */
 export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
+  const [preferences, setPreferences] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('cc_notification_prefs')) || {
+        enableClaimPolling: true,
+        pollIntervalMs: 30000,
+        stickyImportant: true,
+      };
+    } catch {
+      return { enableClaimPolling: true, pollIntervalMs: 30000, stickyImportant: true };
+    }
+  });
+  const [history, setHistory] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('cc_notification_history')) || [];
+    } catch {
+      return [];
+    }
+  });
+  const lastClaimStatusesRef = useRef({});
+  const pollingRef = useRef(null);
+  const abortRef = useRef(null);
 
-  const addNotification = (notification) => {
+  const addNotification = useCallback((notification) => {
     const id = Date.now() + Math.random();
     const newNotification = {
       id,
@@ -32,16 +54,23 @@ export const NotificationProvider = ({ children }) => {
     };
 
     setNotifications(prev => [...prev, newNotification]);
+    setHistory(prev => {
+      const next = [{ ...newNotification, createdAt: Date.now(), read: false }, ...prev].slice(0, 100);
+      localStorage.setItem('cc_notification_history', JSON.stringify(next));
+      return next;
+    });
 
     // Auto-remove notification after duration
-    if (newNotification.duration > 0) {
-      setTimeout(() => {
-        removeNotification(id);
-      }, newNotification.duration);
+    if (!preferences.stickyImportant || (preferences.stickyImportant && newNotification.type === 'info')) {
+      if (newNotification.duration > 0) {
+        setTimeout(() => {
+          removeNotification(id);
+        }, newNotification.duration);
+      }
     }
 
     return id;
-  };
+  }, [preferences.stickyImportant]);
 
   const removeNotification = (id) => {
     setNotifications(prev => prev.filter(notification => notification.id !== id));
@@ -50,6 +79,72 @@ export const NotificationProvider = ({ children }) => {
   const clearAllNotifications = () => {
     setNotifications([]);
   };
+
+  // Preferences persistence
+  useEffect(() => {
+    localStorage.setItem('cc_notification_prefs', JSON.stringify(preferences));
+  }, [preferences]);
+
+  // Unread helpers
+  const unreadCount = useMemo(() => (history || []).filter(h => !h.read).length, [history]);
+  const markAsRead = useCallback((id) => {
+    setHistory(prev => {
+      const next = prev.map(h => (h.id === id ? { ...h, read: true } : h));
+      localStorage.setItem('cc_notification_history', JSON.stringify(next));
+      return next;
+    });
+  }, []);
+  const markAllAsRead = useCallback(() => {
+    setHistory(prev => {
+      const next = prev.map(h => (h.read ? h : { ...h, read: true }));
+      localStorage.setItem('cc_notification_history', JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  // Lightweight polling for claim status changes
+  useEffect(() => {
+    const hasToken = !!localStorage.getItem('token');
+    if (!hasToken || !preferences.enableClaimPolling) return;
+    const poll = async () => {
+      try {
+        abortRef.current?.abort();
+        const controller = new AbortController();
+        abortRef.current = controller;
+        const data = await getMyClaims({ page_size: 20 }, { signal: controller.signal });
+        const claims = data.results || data || [];
+        const last = lastClaimStatusesRef.current || {};
+
+        claims.forEach((c) => {
+          const prevStatus = last[c.id];
+          if (prevStatus && prevStatus !== c.status) {
+            // surface important transitions
+            if (c.status === 'approved') {
+              addNotification({ type: 'success', title: 'Claim Approved', message: `Your claim for "${c.provider?.business_name || 'the business'}" was approved.`, duration: preferences.stickyImportant ? 0 : 10000 });
+            } else if (c.status === 'rejected') {
+              addNotification({ type: 'error', title: 'Claim Rejected', message: `Your claim for "${c.provider?.business_name || 'the business'}" was rejected.`, duration: preferences.stickyImportant ? 0 : 10000 });
+            } else if (c.status === 'under_review') {
+              addNotification({ type: 'info', title: 'Claim Under Review', message: `Your claim for "${c.provider?.business_name || 'the business'}" is under review.`, duration: 7000 });
+            }
+          }
+          last[c.id] = c.status;
+        });
+
+        lastClaimStatusesRef.current = last;
+      } catch (e) {
+        if (e?.name === 'AbortError') return;
+        // ignore polling errors
+      }
+    };
+
+    // kick off immediately, then interval
+    poll();
+    pollingRef.current = setInterval(poll, preferences.pollIntervalMs);
+    return () => {
+      clearInterval(pollingRef.current);
+      abortRef.current?.abort();
+    };
+  }, [preferences.enableClaimPolling, preferences.pollIntervalMs, preferences.stickyImportant, addNotification]);
 
   // Claim-specific notification helpers
   const notifyClaimSubmitted = (businessName) => {
@@ -93,6 +188,13 @@ export const NotificationProvider = ({ children }) => {
     addNotification,
     removeNotification,
     clearAllNotifications,
+    preferences,
+    setPreferences,
+    history,
+    setHistory,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
     // Claim-specific helpers
     notifyClaimSubmitted,
     notifyClaimApproved,
@@ -118,7 +220,7 @@ const NotificationContainer = () => {
   if (notifications.length === 0) return null;
 
   return (
-    <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm w-full">
+    <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm w-full" aria-live="polite" aria-relevant="additions removals">
       {notifications.map((notification) => (
         <NotificationItem
           key={notification.id}

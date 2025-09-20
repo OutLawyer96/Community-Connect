@@ -1,9 +1,29 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { User, Settings, Star, Heart, Calendar } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { User, Star, Heart, FileText } from 'lucide-react';
+import { getMyClaims } from '../services/claimsService';
 
 function Dashboard() {
   const { currentUser } = useAuth();
+  const [claims, setClaims] = useState([]);
+  const [claimsLoading, setClaimsLoading] = useState(false);
+  const [claimsError, setClaimsError] = useState(null);
+
+  useEffect(() => {
+    const loadClaims = async () => {
+      try {
+        setClaimsLoading(true);
+        const data = await getMyClaims({ page_size: 5 });
+        setClaims(data.results || data || []);
+      } catch (e) {
+        setClaimsError('Failed to load your claims');
+      } finally {
+        setClaimsLoading(false);
+      }
+    };
+    if (currentUser) loadClaims();
+  }, [currentUser]);
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -68,6 +88,37 @@ function Dashboard() {
               View Favorites
             </button>
           </div>
+
+          {/* My Claims Card */}
+          <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+            <div className="flex items-center mb-4">
+              <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full flex items-center justify-center mr-4">
+                <FileText className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">My Claims</h3>
+                <p className="text-sm text-gray-600">Recent claim activity</p>
+              </div>
+            </div>
+            {claimsLoading ? (
+              <div className="text-gray-500 text-sm">Loading claims…</div>
+            ) : claimsError ? (
+              <div className="text-red-600 text-sm">{claimsError}</div>
+            ) : (
+              <>
+                <div className="text-3xl font-bold text-gray-900 mb-2">{claims.length}</div>
+                <div className="text-sm text-gray-600 mb-4">recent {claims.length === 1 ? 'claim' : 'claims'}</div>
+                <div className="flex gap-2">
+                  <Link to="/my-claims" className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 px-4 rounded-lg text-center transition-colors">
+                    View Claims
+                  </Link>
+                  <Link to="/claim-business" className="flex-1 bg-gradient-to-r from-primary-500 to-secondary-500 text-white py-2 px-4 rounded-lg text-center hover:shadow-lg transition-all">
+                    Claim Business
+                  </Link>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         {currentUser?.role === 'provider' && (
@@ -79,9 +130,9 @@ function Dashboard() {
                 <p className="text-gray-600 mb-4">
                   Update your business information, services, and contact details.
                 </p>
-                <button className="bg-gradient-to-r from-primary-500 to-secondary-500 text-white px-4 py-2 rounded-lg hover:shadow-lg transition-all">
+                <Link to="/providers" className="inline-flex items-center bg-gradient-to-r from-primary-500 to-secondary-500 text-white px-4 py-2 rounded-lg hover:shadow-lg transition-all">
                   Manage Profile
-                </button>
+                </Link>
               </div>
 
               <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
@@ -89,9 +140,9 @@ function Dashboard() {
                 <p className="text-gray-600 mb-4">
                   View and respond to customer reviews and ratings.
                 </p>
-                <button className="bg-gradient-to-r from-primary-500 to-secondary-500 text-white px-4 py-2 rounded-lg hover:shadow-lg transition-all">
+                <Link to="/providers" className="inline-flex items-center bg-gradient-to-r from-primary-500 to-secondary-500 text-white px-4 py-2 rounded-lg hover:shadow-lg transition-all">
                   View Reviews
-                </button>
+                </Link>
               </div>
             </div>
           </div>

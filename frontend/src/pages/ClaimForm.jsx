@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { submitClaim } from '../../services/claimsService';
-import { useAuth } from '../../contexts/AuthContext';
-import { useClaimNotifications } from '../../contexts/NotificationContext';
+import { submitClaim } from '../services/claimsService';
+import { useAuth } from '../contexts/AuthContext';
+import { useClaimNotifications } from '../contexts/NotificationContext';
 
 /**
  * ClaimForm Component
@@ -12,7 +12,8 @@ const ClaimForm = () => {
   const { providerId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  // eslint-disable-next-line no-unused-vars
+  const { currentUser } = useAuth(); // kept for future guards
   const { notifyClaimSubmitted } = useClaimNotifications();
   
   // Get provider data from navigation state or props
@@ -22,23 +23,47 @@ const ClaimForm = () => {
     additional_info: '',
     business_documents: null
   });
+  const [draftLoaded, setDraftLoaded] = useState(false);
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const isDirtyRef = useRef(false);
 
+  // Note: Route is protected by <PrivateRoute> in App.js. Avoid duplicate redirects here.
+  // If keeping a guard for tests, uncomment below:
+  // useEffect(() => {
+  //   if (process.env.NODE_ENV === 'test') return;
+  //   if (!currentUser) return;
+  // }, [currentUser]);
+
+  // Load draft from localStorage
   useEffect(() => {
-    // Redirect if not authenticated
-    if (!user) {
-      navigate('/login', { 
-        state: { 
-          returnTo: `/claim-business/${providerId}`,
-          message: 'Please log in to claim a business' 
-        } 
-      });
+    try {
+      const key = `cc_claim_draft_${providerId}`;
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const draft = JSON.parse(raw);
+        setFormData((prev) => ({
+          ...prev,
+          additional_info: draft.additional_info || '',
+        }));
+      }
+      setDraftLoaded(true);
+    } catch {
+      setDraftLoaded(true);
     }
-  }, [user, navigate, providerId]);
+  }, [providerId]);
+
+  // Auto-save draft
+  useEffect(() => {
+    if (!draftLoaded) return;
+    const key = `cc_claim_draft_${providerId}`;
+    const payload = { additional_info: formData.additional_info };
+    localStorage.setItem(key, JSON.stringify(payload));
+  }, [draftLoaded, providerId, formData.additional_info]);
 
   // Handle form input changes
   const handleInputChange = (e) => {
@@ -47,15 +72,30 @@ const ClaimForm = () => {
       ...prev,
       [name]: value
     }));
+    isDirtyRef.current = true;
   };
 
   // Handle file selection
   const handleFileChange = (e) => {
     const file = e.target.files[0];
+    if (file) {
+      // basic client-side validation
+      const allowed = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png'];
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (!allowed.includes(file.type)) {
+        setError('Unsupported file type. Please upload PDF, DOC, DOCX, JPG, or PNG.');
+        return;
+      }
+      if (file.size > maxSize) {
+        setError('File is too large. Maximum size is 5MB.');
+        return;
+      }
+    }
     setFormData(prev => ({
       ...prev,
       business_documents: file
     }));
+    isDirtyRef.current = true;
   };
 
   // Handle drag and drop
@@ -76,10 +116,22 @@ const ClaimForm = () => {
     
     const files = e.dataTransfer.files;
     if (files && files[0]) {
+      const file = files[0];
+      const allowed = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png'];
+      const maxSize = 5 * 1024 * 1024;
+      if (!allowed.includes(file.type)) {
+        setError('Unsupported file type. Please upload PDF, DOC, DOCX, JPG, or PNG.');
+        return;
+      }
+      if (file.size > maxSize) {
+        setError('File is too large. Maximum size is 5MB.');
+        return;
+      }
       setFormData(prev => ({
         ...prev,
-        business_documents: files[0]
+        business_documents: file
       }));
+      isDirtyRef.current = true;
     }
   };
 
@@ -88,6 +140,15 @@ const ClaimForm = () => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setProgress(10);
+
+    // simple validation: info not empty
+    if (!formData.additional_info.trim()) {
+      setError('Please provide some additional information to help us verify your claim.');
+      setLoading(false);
+      setProgress(0);
+      return;
+    }
 
     try {
       const claimData = {
@@ -97,7 +158,12 @@ const ClaimForm = () => {
       };
 
       await submitClaim(claimData);
+      setProgress(80);
       setSuccess(true);
+      setProgress(100);
+      isDirtyRef.current = false;
+      // clear draft
+      try { localStorage.removeItem(`cc_claim_draft_${providerId}`); } catch {}
       
       // Show success notification
       notifyClaimSubmitted(provider?.business_name || 'the business');
@@ -113,6 +179,19 @@ const ClaimForm = () => {
       setLoading(false);
     }
   };
+
+  // beforeunload guard if unsaved changes
+  useEffect(() => {
+    const handler = (e) => {
+      if (isDirtyRef.current && !success) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [success]);
 
   // Success state
   if (success) {
@@ -175,6 +254,13 @@ const ClaimForm = () => {
         {/* Form */}
         <div className="bg-white rounded-lg shadow-md p-8">
           <form onSubmit={handleSubmit}>
+            {progress > 0 && !success && (
+              <div className="mb-6">
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: `${progress}%` }} />
+                </div>
+              </div>
+            )}
             {/* Additional Information */}
             <div className="mb-6">
               <label htmlFor="additional_info" className="block text-sm font-medium text-gray-700 mb-2">
@@ -189,6 +275,9 @@ const ClaimForm = () => {
                 placeholder="Please provide any additional information about your ownership of this business, such as how long you've owned it, your role, etc."
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               />
+              {!formData.additional_info.trim() && (
+                <p className="text-xs text-red-600 mt-1">This field is recommended to speed up verification.</p>
+              )}
               <p className="text-xs text-gray-500 mt-1">
                 This information helps us verify your claim faster.
               </p>

@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from django.contrib.auth import login, logout
-from django.db.models import Q, Avg
+from django.db.models import Q, Avg, Count, Case, When, FloatField, Value
+from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank
 from django.utils import timezone
 from rest_framework import generics, status, permissions
 from rest_framework.decorators import api_view, permission_classes
@@ -10,8 +11,9 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.throttling import UserRateThrottle, AnonRateThrottle
+import math
 
-from .models import Category, Provider, User, Service, Address, Review, Favorite, Claim
+from .models import Category, Provider, User, Service, Address, Review, Favorite, Claim, Availability
 from .serializers import (
     CategorySerializer, ProviderSerializer, ProviderListSerializer, 
     UserSerializer, ServiceSerializer, AddressSerializer, 
@@ -19,6 +21,26 @@ from .serializers import (
 )
 from .permissions import ClaimCreatePermission, ClaimOwnerPermission
 from .utils import send_claim_verification_email, approve_claim as approve_claim_util, reject_claim as reject_claim_util
+
+
+def calculate_distance(lat1, lon1, lat2, lon2):
+    """Calculate distance between two coordinates using Haversine formula"""
+    if not all([lat1, lon1, lat2, lon2]):
+        return None
+    
+    # Convert latitude and longitude from degrees to radians
+    lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
+    
+    # Haversine formula
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+    c = 2 * math.asin(math.sqrt(a))
+    
+    # Radius of earth in kilometers
+    r = 6371
+    
+    return c * r
 
 
 # Custom throttle classes for claim endpoints
@@ -61,6 +83,7 @@ def api_root(request):
             },
             'Categories': {
                 'list': '/api/categories/',
+                'stats': '/api/categories/stats/',
             },
             'Providers': {
                 'list': '/api/providers/',
@@ -173,6 +196,17 @@ def api_docs(request):
                 'GET /categories/': {
                     'description': 'List all service categories',
                     'response': 'List of categories with subcategories'
+                },
+                'GET /categories/stats/': {
+                    'description': 'List all active categories with counts of active providers offering services in each category',
+                    'response': [
+                        {
+                            'id': 1,
+                            'name': 'Plumbing',
+                            'provider_count': 45,
+                            'color': 'bg-blue-500'
+                        }
+                    ]
                 }
             },
             'search': {
@@ -210,6 +244,47 @@ def api_docs(request):
             }
         }
     })
+
+# Category statistics view
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def category_stats(request):
+    """
+    Return list of active categories annotated with provider counts.
+    Counts distinct active providers that have at least one active service in the category.
+    """
+    try:
+        # Annotate categories with distinct provider counts via active services and active providers
+        queryset = (
+            Category.objects.filter(is_active=True)
+            .annotate(
+                provider_count=Count(
+                    'services__provider',
+                    filter=Q(services__is_active=True, services__provider__is_active=True),
+                    distinct=True,
+                )
+            )
+            .order_by('name')
+        )
+
+        # Simple rotating color palette for UI usage
+        palette = [
+            'bg-blue-500', 'bg-yellow-500', 'bg-green-500', 'bg-purple-500',
+            'bg-emerald-500', 'bg-red-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500',
+        ]
+
+        data = []
+        for idx, cat in enumerate(queryset):
+            data.append({
+                'id': cat.id,
+                'name': cat.name,
+                'provider_count': int(cat.provider_count or 0),
+                'color': palette[idx % len(palette)],
+            })
+
+        return Response(data)
+    except Exception:
+        return Response({'error': 'Unable to fetch category statistics'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # Authentication Views
 @api_view(['POST'])
@@ -265,15 +340,37 @@ class ProviderListView(generics.ListAPIView):
     def get_queryset(self):
         queryset = Provider.objects.filter(is_active=True)
         
-        # Search functionality
+        # Optimize queryset to prevent N+1 queries
+        queryset = queryset.select_related('user').prefetch_related(
+            'addresses', 
+            'services', 
+            'reviews'
+        )
+        
+        # Enhanced search functionality with PostgreSQL full-text search
         search = self.request.query_params.get('search', None)
         if search:
-            queryset = queryset.filter(
-                Q(business_name__icontains=search) | 
-                Q(description__icontains=search) |
-                Q(services__name__icontains=search) |
-                Q(services__description__icontains=search)
-            ).distinct()
+            # Use PostgreSQL full-text search if available, fallback to basic search
+            try:
+                from django.db import connection
+                if connection.vendor == 'postgresql' and hasattr(Provider, 'search_vector'):
+                    # Use persisted search vector for efficient searching
+                    search_query = SearchQuery(search)
+                    queryset = queryset.filter(
+                        search_vector=search_query
+                    ).annotate(
+                        rank=SearchRank('search_vector', search_query)
+                    ).order_by('-rank')
+                else:
+                    raise ImportError("PostgreSQL not available")
+            except (ImportError, Exception):
+                # Fallback to basic search if PostgreSQL search not available
+                queryset = queryset.filter(
+                    Q(business_name__icontains=search) | 
+                    Q(description__icontains=search) |
+                    Q(services__name__icontains=search) |
+                    Q(services__description__icontains=search)
+                ).distinct()
         
         # Filter by category
         category = self.request.query_params.get('category', None)
@@ -285,6 +382,16 @@ class ProviderListView(generics.ListAPIView):
         if city:
             queryset = queryset.filter(addresses__city__icontains=city)
         
+        # Filter by state
+        state = self.request.query_params.get('state', None)
+        if state:
+            queryset = queryset.filter(addresses__state__icontains=state)
+        
+        # Filter by claimed status
+        is_claimed = self.request.query_params.get('is_claimed')
+        if is_claimed is not None:
+            queryset = queryset.filter(is_claimed=is_claimed.lower() in ['true','1','yes'])
+        
         # Filter by minimum rating
         min_rating = self.request.query_params.get('min_rating', None)
         if min_rating:
@@ -292,7 +399,304 @@ class ProviderListView(generics.ListAPIView):
                 avg_rating=Avg('reviews__rating')
             ).filter(avg_rating__gte=min_rating)
         
-        return queryset
+        # Price range filtering with aggregation
+        min_price = self.request.query_params.get('min_price', None)
+        max_price = self.request.query_params.get('max_price', None)
+        if min_price or max_price:
+            from django.db.models import Min, Max, Avg as AvgPrice
+            # Annotate with min, max, and average prices from services
+            queryset = queryset.annotate(
+                min_service_price=Min('services__price'),
+                max_service_price=Max('services__price'),
+                avg_service_price=AvgPrice('services__price')
+            )
+            if min_price:
+                try:
+                    min_price_val = float(min_price)
+                    queryset = queryset.filter(min_service_price__gte=min_price_val)
+                except (ValueError, TypeError):
+                    pass
+            if max_price:
+                try:
+                    max_price_val = float(max_price)
+                    queryset = queryset.filter(min_service_price__lte=max_price_val)
+                except (ValueError, TypeError):
+                    pass
+            queryset = queryset.distinct()
+        else:
+            # Always include price annotations for serializer, even when not filtering
+            from django.db.models import Min, Max, Avg as AvgPrice
+            queryset = queryset.annotate(
+                min_service_price=Min('services__price'),
+                max_service_price=Max('services__price'),
+                avg_service_price=AvgPrice('services__price')
+            )
+
+        # Enhanced availability filtering
+        available_today = self.request.query_params.get('available_today', None)
+        available_day = self.request.query_params.get('available_day', None)
+        available_at = self.request.query_params.get('available_at', None)
+        
+        if available_today and available_today.lower() == 'true':
+            today = timezone.now().strftime('%A').lower()
+            queryset = queryset.filter(
+                availability__day_of_week=today,
+                availability__is_available=True
+            ).distinct()
+        elif available_day:
+            # Filter by specific day of week
+            valid_days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+            if available_day.lower() in valid_days:
+                queryset = queryset.filter(
+                    availability__day_of_week=available_day.lower(),
+                    availability__is_available=True
+                ).distinct()
+        elif available_at:
+            # Filter by specific datetime
+            try:
+                from django.utils.dateparse import parse_datetime
+                target_datetime = parse_datetime(available_at)
+                if target_datetime:
+                    day_of_week = target_datetime.strftime('%A').lower()
+                    target_time = target_datetime.time()
+                    
+                    queryset = queryset.filter(
+                        availability__day_of_week=day_of_week,
+                        availability__start_time__lte=target_time,
+                        availability__end_time__gte=target_time,
+                        availability__is_available=True
+                    ).distinct()
+            except (ValueError, TypeError):
+                pass
+
+        # Service category filtering (enhanced)
+        service_category = self.request.query_params.get('service_category', None)
+        if service_category:
+            queryset = queryset.filter(services__category_id=service_category).distinct()
+
+        # Verified providers filter
+        verified_only = self.request.query_params.get('verified_only', None)
+        if verified_only and verified_only.lower() == 'true':
+            queryset = queryset.filter(is_verified=True)
+        
+        # Distance-based filtering and annotation
+        lat = self.request.query_params.get('lat', None)
+        lng = self.request.query_params.get('lng', None)
+        radius = self.request.query_params.get('radius', None)
+        distance_annotated = False
+        
+        if lat and lng:
+            try:
+                lat = float(lat)
+                lng = float(lng)
+                radius = float(radius) if radius else 50  # Default 50km radius
+                
+                # Use Haversine formula for distance calculation using raw SQL
+                # This calculates distance in kilometers
+                from django.db.models import F, Value
+                from django.db import models
+                import math
+                
+                # Convert to radians for calculation
+                lat_rad = math.radians(lat)
+                lng_rad = math.radians(lng)
+                
+                # Haversine formula implementation in raw SQL
+                haversine_sql = f"""
+                    6371 * 2 * ASIN(
+                        SQRT(
+                            POWER(SIN(RADIANS(%s - addresses.latitude) / 2), 2) +
+                            COS(RADIANS(addresses.latitude)) * COS(RADIANS(%s)) * 
+                            POWER(SIN(RADIANS(%s - addresses.longitude) / 2), 2)
+                        )
+                    )
+                """
+                
+                # Annotate with distance calculation
+                queryset = queryset.annotate(
+                    distance=Case(
+                        When(
+                            addresses__latitude__isnull=False,
+                            addresses__longitude__isnull=False,
+                            then=models.ExpressionWrapper(
+                                models.RawSQL(haversine_sql, [lat, lat, lng]),
+                                output_field=models.FloatField()
+                            )
+                        ),
+                        default=Value(999999),  # Very large distance for providers without coordinates
+                        output_field=models.FloatField()
+                    )
+                )
+                distance_annotated = True
+                
+                # Filter by radius if specified
+                if radius:
+                    queryset = queryset.filter(
+                        Q(distance__lte=radius) | Q(distance__isnull=True)
+                    )
+                
+            except (ValueError, TypeError):
+                pass
+        
+        # Sorting functionality
+        ordering = self.request.query_params.get('ordering', None)
+        valid_orderings = ['distance', '-distance', 'rating', '-rating', 'price', '-price', 'relevance', 'name', '-name']
+        
+        if ordering and ordering in valid_orderings:
+            if ordering in ['rating', '-rating']:
+                # Check if avg_rating already exists from min_rating filter
+                if 'avg_rating' not in [f.name for f in queryset.query.annotations]:
+                    queryset = queryset.annotate(avg_rating=Avg('reviews__rating'))
+                queryset = queryset.order_by('avg_rating' if ordering == 'rating' else '-avg_rating')
+            elif ordering in ['price', '-price']:
+                from django.db.models import Min
+                queryset = queryset.annotate(min_price=Min('services__price'))
+                queryset = queryset.order_by('min_price' if ordering == 'price' else '-min_price')
+            elif ordering in ['name', '-name']:
+                queryset = queryset.order_by('business_name' if ordering == 'name' else '-business_name')
+            elif ordering == 'relevance':
+                # Only use relevance ordering when there's a search query
+                search = self.request.query_params.get('search', None)
+                if search:
+                    try:
+                        from django.db import connection
+                        if connection.vendor == 'postgresql' and hasattr(Provider, 'search_vector'):
+                            # Use persisted search vector for relevance ordering
+                            search_query = SearchQuery(search)
+                            queryset = queryset.annotate(
+                                rank=SearchRank('search_vector', search_query)
+                            ).order_by('-rank')
+                        else:
+                            raise ImportError("PostgreSQL not available")
+                    except (ImportError, Exception):
+                        # Fallback if PostgreSQL search not available - order by text similarity
+                        queryset = queryset.extra(
+                            select={
+                                'similarity': "similarity(business_name, %s)"
+                            },
+                            select_params=[search],
+                        ).order_by('-similarity')
+            elif ordering in ['distance', '-distance']:
+                # Distance ordering only works when lat/lng are provided and annotated
+                if distance_annotated:
+                    queryset = queryset.order_by('distance' if ordering == 'distance' else '-distance')
+        else:
+            # Default ordering: claimed providers first, then by rating
+            if 'avg_rating' not in [f.name for f in queryset.query.annotations]:
+                queryset = queryset.annotate(avg_rating=Avg('reviews__rating'))
+            queryset = queryset.order_by('-is_claimed', '-avg_rating')
+        
+        return queryset.distinct()
+
+class ProviderSearchSuggestionsView(generics.ListAPIView):
+    """Provide search suggestions for providers and services"""
+    permission_classes = [AllowAny]
+    throttle_classes = [AnonRateThrottle]
+    throttle_scope = 'search_suggestions'
+    
+    def get(self, request, *args, **kwargs):
+        query = request.query_params.get('q', '').strip()
+        
+        if len(query) < 2:
+            return Response({
+                'suggestions': {
+                    'providers': [],
+                    'services': [],
+                    'categories': [],
+                    'locations': []
+                },
+                'total_count': 0
+            })
+        
+        # Get provider suggestions with additional info
+        provider_suggestions = Provider.objects.filter(
+            business_name__icontains=query,
+            is_active=True
+        ).select_related().values(
+            'id', 'business_name', 'is_verified', 'is_claimed'
+        )[:5]
+        
+        providers = [{
+            'id': p['id'],
+            'name': p['business_name'],
+            'type': 'provider',
+            'verified': p['is_verified'],
+            'claimed': p['is_claimed']
+        } for p in provider_suggestions]
+        
+        # Get service suggestions with provider info
+        service_suggestions = Service.objects.filter(
+            name__icontains=query,
+            provider__is_active=True,
+            is_active=True
+        ).select_related('provider', 'category').values(
+            'id', 'name', 'provider__business_name', 'provider__id', 'category__name'
+        ).distinct()[:5]
+        
+        services = [{
+            'id': s['id'],
+            'name': s['name'],
+            'type': 'service',
+            'provider_name': s['provider__business_name'],
+            'provider_id': s['provider__id'],
+            'category': s['category__name']
+        } for s in service_suggestions]
+        
+        # Get category suggestions
+        category_suggestions = Category.objects.filter(
+            name__icontains=query,
+            is_active=True
+        ).values('id', 'name')[:3]
+        
+        categories = [{
+            'id': c['id'],
+            'name': c['name'],
+            'type': 'category'
+        } for c in category_suggestions]
+        
+        # Get location suggestions (cities and states)
+        location_suggestions = Address.objects.filter(
+            Q(city__icontains=query) | Q(state__icontains=query)
+        ).values('city', 'state').distinct()[:3]
+        
+        locations = [{
+            'name': f"{loc['city']}, {loc['state']}",
+            'city': loc['city'],
+            'state': loc['state'],
+            'type': 'location'
+        } for loc in location_suggestions]
+        
+        total_count = len(providers) + len(services) + len(categories) + len(locations)
+        
+        return Response({
+            'suggestions': {
+                'providers': providers,
+                'services': services,
+                'categories': categories,
+                'locations': locations
+            },
+            'total_count': total_count,
+            'query': query
+        })
+
+class LocationSuggestionsView(generics.ListAPIView):
+    """Provide location-based suggestions"""
+    permission_classes = [AllowAny]
+    
+    def get(self, request, *args, **kwargs):
+        query = request.query_params.get('q', '').strip()
+        
+        if len(query) < 2:
+            return Response({'suggestions': []})
+        
+        # Get city suggestions
+        cities = Address.objects.filter(
+            city__icontains=query
+        ).values_list('city', 'state').distinct()[:10]
+        
+        suggestions = [f"{city}, {state}" for city, state in cities]
+        
+        return Response({'suggestions': suggestions})
 
 class ProviderDetailView(generics.RetrieveAPIView):
     queryset = Provider.objects.filter(is_active=True)

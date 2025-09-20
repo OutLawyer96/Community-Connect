@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getClaimDetail, withdrawClaim } from '../services/claimsService';
-import { ClaimStatusBadge, ClaimProgressSteps } from '../components/claims/ClaimStatusBadge';
+import ClaimStatusBadge, { ClaimProgressSteps } from '../components/claims/ClaimStatusBadge';
 import { useAuth } from '../contexts/AuthContext';
 
 /**
@@ -11,18 +11,14 @@ import { useAuth } from '../contexts/AuthContext';
 const ClaimDetail = () => {
   const { claimId } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  useAuth(); // ensure auth context initialized (user unused here)
   
   const [claim, setClaim] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [withdrawing, setWithdrawing] = useState(false);
 
-  useEffect(() => {
-    fetchClaimDetail();
-  }, [claimId]);
-
-  const fetchClaimDetail = async () => {
+  const fetchClaimDetail = useCallback(async () => {
     try {
       setLoading(true);
       const claimData = await getClaimDetail(claimId);
@@ -33,7 +29,11 @@ const ClaimDetail = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [claimId]);
+
+  useEffect(() => {
+    fetchClaimDetail();
+  }, [fetchClaimDetail]);
 
   const handleWithdrawClaim = async () => {
     if (!window.confirm('Are you sure you want to withdraw this claim? This action cannot be undone.')) {

@@ -1,27 +1,26 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
-  Star, MapPin, Phone, Mail, Globe, Clock, Shield, 
-  ThumbsUp, MessageCircle, Calendar, User, ArrowLeft,
-  Award, CheckCircle, Heart, Share2
+  Star, MapPin, Phone, MessageCircle, Calendar, ArrowLeft,
+  CheckCircle, Heart, Share2, User, Shield, Clock, Award, Mail, Globe
 } from 'lucide-react';
 import apiClient from '../config/axios';
-import API_CONFIG, { APP_CONFIG } from '../config/api';
+import API_CONFIG from '../config/api';
+import { useAuth } from '../contexts/AuthContext';
+import { ProviderClaimStatus } from '../components/claims/ClaimStatusBadge';
 
 function ProviderDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { currentUser } = useAuth();
   const [provider, setProvider] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
 
-  useEffect(() => {
-    fetchProviderDetails();
-  }, [id]);
-
-  const fetchProviderDetails = async () => {
+  const fetchProviderDetails = useCallback(async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/providers/${id}/`);
+      const response = await apiClient.get(API_CONFIG.ENDPOINTS.PROVIDER_DETAIL(id));
       setProvider(response.data);
     } catch (error) {
       console.error('Error fetching provider details:', error);
@@ -29,6 +28,23 @@ function ProviderDetail() {
     } finally {
       setLoading(false);
     }
+  }, [id]);
+
+  useEffect(() => {
+    fetchProviderDetails();
+  }, [fetchProviderDetails]);
+
+  const handleClaimClick = () => {
+    if (!currentUser) {
+      navigate('/login', {
+        state: {
+          returnTo: `/claim-business/${id}`,
+          message: 'Please log in to claim this business.'
+        }
+      });
+      return;
+    }
+    navigate(`/claim-business/${id}`, { state: { provider } });
   };
 
   const formatDate = (dateString) => {
@@ -124,10 +140,11 @@ function ProviderDetail() {
           <div className="p-8">
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between">
               <div className="flex-1">
-                <div className="flex items-center mb-4">
-                  <h1 className="text-3xl font-bold text-gray-900 mr-3">
+                <div className="flex items-center gap-3 mb-4 flex-wrap">
+                  <h1 className="text-3xl font-bold text-gray-900">
                     {provider.business_name}
                   </h1>
+                  <ProviderClaimStatus provider={provider} />
                   {provider.is_verified && (
                     <CheckCircle className="w-8 h-8 text-green-500" title="Verified Provider" />
                   )}
@@ -177,6 +194,14 @@ function ProviderDetail() {
                   <Share2 className="w-4 h-4 mr-2" />
                   Share
                 </button>
+                {!provider.is_claimed && (
+                  <button
+                    onClick={handleClaimClick}
+                    className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-primary-500 to-secondary-500 text-white rounded-lg hover:shadow-lg font-medium"
+                  >
+                    Claim This Business
+                  </button>
+                )}
               </div>
             </div>
           </div>

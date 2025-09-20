@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getAllClaims, approveClaim, rejectClaim } from '../services/claimsService';
-import { ClaimStatusBadge } from '../components/claims/ClaimStatusBadge';
+import ClaimStatusBadge from '../components/claims/ClaimStatusBadge';
 import { useAuth } from '../contexts/AuthContext';
 
 /**
@@ -16,6 +16,10 @@ const AdminClaimManager = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClaims, setSelectedClaims] = useState(new Set());
   const [processingBulk, setProcessingBulk] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [ordering, setOrdering] = useState('-created_at'); // '-created_at' newest first
+  const [stats, setStats] = useState({ loading: true, total: 0, pending: 0, under_review: 0, approved: 0, rejected: 0 });
   const [pagination, setPagination] = useState({
     page: 1,
     totalPages: 1,
@@ -26,20 +30,17 @@ const AdminClaimManager = () => {
   // Check if user has admin permissions
   const isAdmin = user?.is_staff || user?.is_superuser;
 
-  useEffect(() => {
-    if (isAdmin) {
-      fetchClaims();
-    }
-  }, [filter, searchTerm, pagination.page, isAdmin]);
-
-  const fetchClaims = async () => {
+  const fetchClaims = useCallback(async () => {
     try {
       setLoading(true);
       const params = {
         page: pagination.page,
         page_size: pagination.pageSize,
         search: searchTerm,
-        status: filter === 'all' ? undefined : filter
+        status: filter === 'all' ? undefined : filter,
+        created_from: dateFrom || undefined,
+        created_to: dateTo || undefined,
+        ordering,
       };
       
       const response = await getAllClaims(params);
@@ -55,7 +56,41 @@ const AdminClaimManager = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [pagination.page, pagination.pageSize, searchTerm, filter, dateFrom, dateTo, ordering]);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      setStats(prev => ({ ...prev, loading: true }));
+      const base = {
+        search: searchTerm,
+        created_from: dateFrom || undefined,
+        created_to: dateTo || undefined,
+      };
+      const fetchCount = async (extra = {}) => {
+        const resp = await getAllClaims({ ...base, ...extra, page: 1, page_size: 1 });
+        return resp.count || 0;
+      };
+      const [total, pending, under_review, approved, rejected] = await Promise.all([
+        fetchCount(),
+        fetchCount({ status: 'pending' }),
+        fetchCount({ status: 'under_review' }),
+        fetchCount({ status: 'approved' }),
+        fetchCount({ status: 'rejected' }),
+      ]);
+      setStats({ loading: false, total, pending, under_review, approved, rejected });
+    } catch (e) {
+      // Non-blocking; leave previous stats if error
+      setStats(prev => ({ ...prev, loading: false }));
+      console.error('Error fetching claim stats:', e);
+    }
+  }, [searchTerm, dateFrom, dateTo]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      fetchClaims();
+      fetchStats();
+    }
+  }, [filter, searchTerm, pagination.page, isAdmin, fetchClaims, fetchStats]);
 
   const handleClaimAction = async (claimId, action, notes = '') => {
     try {
@@ -194,6 +229,27 @@ const AdminClaimManager = () => {
           </div>
         </div>
 
+        {/* Analytics Widgets */}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+          {[
+            { label: 'Total', value: stats.total, color: 'from-gray-500 to-gray-700', bg: 'bg-gray-100', text: 'text-gray-700' },
+            { label: 'Pending', value: stats.pending, color: 'from-yellow-500 to-yellow-600', bg: 'bg-yellow-100', text: 'text-yellow-700' },
+            { label: 'Under Review', value: stats.under_review, color: 'from-blue-500 to-blue-600', bg: 'bg-blue-100', text: 'text-blue-700' },
+            { label: 'Approved', value: stats.approved, color: 'from-green-500 to-green-600', bg: 'bg-green-100', text: 'text-green-700' },
+            { label: 'Rejected', value: stats.rejected, color: 'from-red-500 to-red-600', bg: 'bg-red-100', text: 'text-red-700' },
+          ].map((c) => (
+            <div key={c.label} className="bg-white rounded-lg shadow-md p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">{c.label}</p>
+                  <p className={`text-2xl font-bold ${c.text}`}>{stats.loading ? '—' : c.value}</p>
+                </div>
+                <div className={`w-10 h-10 rounded-full bg-gradient-to-r ${c.color} opacity-80`} />
+              </div>
+            </div>
+          ))}
+        </div>
+
         {/* Filters and Search */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
@@ -237,6 +293,44 @@ const AdminClaimManager = () => {
                 }}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
+            </div>
+          </div>
+
+          {/* Advanced Filters */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+            <div className="flex items-center gap-2">
+              <label htmlFor="admin-date-from" className="text-sm text-gray-600 whitespace-nowrap">From</label>
+              <input
+                id="admin-date-from"
+                type="date"
+                value={dateFrom}
+                onChange={(e) => { setDateFrom(e.target.value); setPagination(prev => ({ ...prev, page: 1 })); }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="admin-date-to" className="text-sm text-gray-600 whitespace-nowrap">To</label>
+              <input
+                id="admin-date-to"
+                type="date"
+                value={dateTo}
+                onChange={(e) => { setDateTo(e.target.value); setPagination(prev => ({ ...prev, page: 1 })); }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="admin-ordering" className="text-sm text-gray-600 whitespace-nowrap">Sort</label>
+              <select
+                id="admin-ordering"
+                value={ordering}
+                onChange={(e) => { setOrdering(e.target.value); setPagination(prev => ({ ...prev, page: 1 })); }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              >
+                <option value="-created_at">Newest first</option>
+                <option value="created_at">Oldest first</option>
+                <option value="status">Status A→Z</option>
+                <option value="-status">Status Z→A</option>
+              </select>
             </div>
           </div>
 

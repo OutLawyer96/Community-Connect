@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.db.models import Avg
-from .models import Category, Provider, User, Service, Address, Review, Claim
+from .models import Category, Provider, User, Service, Address, Review, Claim, Availability
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -25,9 +25,23 @@ class CategorySerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'parent_category', 'subcategories']
 
 class AddressSerializer(serializers.ModelSerializer):
+    # Add distance field for search results (calculated dynamically)
+    distance = serializers.SerializerMethodField()
+    
     class Meta:
         model = Address
-        fields = ['id', 'street', 'city', 'state', 'postal_code', 'latitude', 'longitude']
+        fields = ['id', 'street', 'city', 'state', 'postal_code', 'latitude', 'longitude', 'distance']
+    
+    def get_distance(self, obj):
+        # Return distance if it was annotated in the queryset
+        return getattr(obj, 'distance', None)
+
+class AvailabilitySerializer(serializers.ModelSerializer):
+    day_of_week_display = serializers.CharField(source='get_day_of_week_display', read_only=True)
+    
+    class Meta:
+        model = Availability
+        fields = ['id', 'day_of_week', 'day_of_week_display', 'start_time', 'end_time', 'is_available']
 
 class ServiceSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
@@ -52,6 +66,7 @@ class ProviderSerializer(serializers.ModelSerializer):
     )
     services = ServiceSerializer(many=True, read_only=True)
     addresses = AddressSerializer(many=True, read_only=True)
+    availability = AvailabilitySerializer(many=True, read_only=True)
     reviews = ReviewSerializer(many=True, read_only=True)
     average_rating = serializers.SerializerMethodField()
     review_count = serializers.SerializerMethodField()
@@ -59,7 +74,7 @@ class ProviderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Provider
         fields = ['user', 'business_name', 'description', 'created_at', 'is_claimed',
-                 'services', 'addresses', 'reviews', 'average_rating', 'review_count']
+                 'services', 'addresses', 'availability', 'reviews', 'average_rating', 'review_count']
         
     def get_average_rating(self, obj):
         avg = obj.reviews.aggregate(Avg('rating'))['rating__avg']
@@ -79,10 +94,17 @@ class ProviderListSerializer(serializers.ModelSerializer):
     review_count = serializers.SerializerMethodField()
     primary_address = serializers.SerializerMethodField()
     
+    # Price and distance annotations (read-only fields for queryset annotations)
+    distance = serializers.FloatField(read_only=True)
+    min_service_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    max_service_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    avg_service_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    
     class Meta:
         model = Provider
-        fields = ['user', 'business_name', 'description', 'is_claimed', 'average_rating', 
-                 'review_count', 'primary_address']
+        fields = ['id', 'user', 'business_name', 'description', 'is_claimed', 'average_rating', 
+                 'review_count', 'primary_address', 'distance', 'min_service_price', 
+                 'max_service_price', 'avg_service_price']
         
     def get_average_rating(self, obj):
         avg = obj.reviews.aggregate(Avg('rating'))['rating__avg']
