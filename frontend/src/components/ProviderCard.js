@@ -1,28 +1,28 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { useSpring, animated } from '@react-spring/web';
-import { useInView } from 'react-intersection-observer';
-import { Star, MapPin, MessageCircle } from 'lucide-react';
+import React from "react";
+import { Link } from "react-router-dom";
+import { useSpring, animated } from "@react-spring/web";
+import { useInView } from "react-intersection-observer";
+import { Star, MapPin, MessageCircle } from "lucide-react";
 
 const ProviderCard = ({ provider, index }) => {
   const [ref, inView] = useInView({
     triggerOnce: true,
-    threshold: 0.1
+    threshold: 0.1,
   });
 
   const springProps = useSpring({
-    from: { opacity: 0, transform: 'translateY(30px)' },
+    from: { opacity: 0, transform: "translateY(30px)" },
     to: {
       opacity: inView ? 1 : 0,
-      transform: inView ? 'translateY(0)' : 'translateY(30px)'
+      transform: inView ? "translateY(0)" : "translateY(30px)",
     },
     delay: index * 100, // Staggered animation
-    config: { tension: 280, friction: 60 }
+    config: { tension: 280, friction: 60 },
   });
 
   const hoverProps = useSpring({
     scale: 1,
-    config: { tension: 300, friction: 10 }
+    config: { tension: 300, friction: 10 },
   });
 
   const onHover = () => {
@@ -49,7 +49,7 @@ const ProviderCard = ({ provider, index }) => {
               alt={provider.name}
               className="w-full h-full object-cover"
               style={{
-                transform: hoverProps.scale.to(s => `scale(${s})`)
+                transform: hoverProps.scale.to((s) => `scale(${s})`),
               }}
             />
           </div>
@@ -66,18 +66,22 @@ const ProviderCard = ({ provider, index }) => {
               {provider.rating} ({provider.reviewCount} reviews)
             </span>
           </div>
-          <p className="text-gray-600 mb-4 line-clamp-2">{provider.description}</p>
+          <p className="text-gray-600 mb-4 line-clamp-2">
+            {provider.description}
+          </p>
           <div className="flex justify-between items-center">
             <animated.button
               className="flex items-center text-blue-600 hover:text-blue-800"
               style={{
-                transform: hoverProps.scale.to(s => `scale(${s})`)
+                transform: hoverProps.scale.to((s) => `scale(${s})`),
               }}
             >
               <MessageCircle className="w-4 h-4 mr-1" />
               Contact
             </animated.button>
-            <span className="text-gray-500 text-sm">{provider.distance} away</span>
+            <span className="text-gray-500 text-sm">
+              {provider.distance} away
+            </span>
           </div>
         </div>
       </Link>

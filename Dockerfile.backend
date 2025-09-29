@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
     libgeos-dev \
     postgresql-client \
     build-essential \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security

@@ -1,34 +1,32 @@
-import React, { useState, useCallback, useRef } from 'react';
-import { Autocomplete } from '@react-google-maps/api';
-import { MapPin, Crosshair, AlertCircle } from 'lucide-react';
-import { useSpring, animated } from '@react-spring/web';
-import { APP_CONFIG } from '../config/api';
-import GoogleMapsLoader from './GoogleMapsLoader';
-import { useFadeIn } from '../utils/animations';
+import React, { useState, useCallback, useRef } from "react";
+import { Autocomplete } from "@react-google-maps/api";
+import { MapPin, Crosshair, AlertCircle } from "lucide-react";
+import { APP_CONFIG } from "../config/api";
+import GoogleMapsLoader from "./GoogleMapsLoader";
 
 /**
  * LocationInput Component
  * Allows users to input location manually, use Google Places Autocomplete, or use current location via geolocation
  */
-const LocationInput = ({ 
-  onLocationChange, 
+const LocationInput = ({
+  onLocationChange,
   placeholder = "Enter city, state or address...",
   className = "",
-  initialValue = ""
+  initialValue = "",
 }) => {
   const [location, setLocation] = useState(initialValue);
   const [coordinates, setCoordinates] = useState({ lat: null, lng: null });
   const [isUsingGeolocation, setIsUsingGeolocation] = useState(false);
   const [geolocationError, setGeolocationError] = useState(null);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
-  
+
   const autocompleteRef = useRef(null);
 
   // Handle manual location input
   const handleLocationChange = (e) => {
     const value = e.target.value;
     setLocation(value);
-    
+
     // Reset coordinates when typing manually
     if (isUsingGeolocation) {
       setIsUsingGeolocation(false);
@@ -41,14 +39,14 @@ const LocationInput = ({
       address: value,
       lat: null,
       lng: null,
-      source: 'manual'
+      source: "manual",
     });
   };
 
   // Get current location using geolocation API
   const handleUseCurrentLocation = useCallback(() => {
     if (!navigator.geolocation) {
-      setGeolocationError('Geolocation is not supported by this browser');
+      setGeolocationError("Geolocation is not supported by this browser");
       return;
     }
 
@@ -58,17 +56,17 @@ const LocationInput = ({
     const options = {
       enableHighAccuracy: true,
       timeout: 10000,
-      maximumAge: 300000 // 5 minutes
+      maximumAge: 300000, // 5 minutes
     };
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
-        
+
         try {
           // Reverse geocode to get address
           const address = await reverseGeocode(latitude, longitude);
-          
+
           setCoordinates({ lat: latitude, lng: longitude });
           setLocation(address);
           setIsUsingGeolocation(true);
@@ -79,11 +77,11 @@ const LocationInput = ({
             address,
             lat: latitude,
             lng: longitude,
-            source: 'geolocation'
+            source: "geolocation",
           });
         } catch (error) {
-          console.error('Reverse geocoding failed:', error);
-          
+          console.error("Reverse geocoding failed:", error);
+
           // Still use coordinates even if reverse geocoding fails
           setCoordinates({ lat: latitude, lng: longitude });
           setLocation(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
@@ -94,31 +92,32 @@ const LocationInput = ({
             address: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
             lat: latitude,
             lng: longitude,
-            source: 'geolocation'
+            source: "geolocation",
           });
         }
       },
       (error) => {
         setIsLoadingLocation(false);
-        
+
         let errorMessage;
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            errorMessage = 'Location access denied by user';
+            errorMessage = "Location access denied by user";
             break;
           case error.POSITION_UNAVAILABLE:
-            errorMessage = 'Location information is unavailable';
+            errorMessage = "Location information is unavailable";
             break;
           case error.TIMEOUT:
-            errorMessage = 'Location request timed out';
+            errorMessage = "Location request timed out";
             break;
           default:
-            errorMessage = 'An unknown error occurred while retrieving location';
+            errorMessage =
+              "An unknown error occurred while retrieving location";
             break;
         }
-        
+
         setGeolocationError(errorMessage);
-        console.error('Geolocation error:', error);
+        console.error("Geolocation error:", error);
       },
       options
     );
@@ -129,23 +128,23 @@ const LocationInput = ({
     const autocomplete = autocompleteRef.current;
     if (autocomplete) {
       const place = autocomplete.getPlace();
-      
+
       if (place && place.geometry && place.geometry.location) {
         const lat = place.geometry.location.lat();
         const lng = place.geometry.location.lng();
         const address = place.formatted_address || place.name;
-        
+
         setLocation(address);
         setCoordinates({ lat, lng });
         setIsUsingGeolocation(false);
         setGeolocationError(null);
-        
+
         onLocationChange?.({
           address,
           lat,
           lng,
-          source: 'autocomplete',
-          place
+          source: "autocomplete",
+          place,
         });
       }
     }
@@ -157,13 +156,13 @@ const LocationInput = ({
       if (window.google?.maps?.Geocoder) {
         const geocoder = new window.google.maps.Geocoder();
         const latlng = { lat, lng };
-        
+
         return new Promise((resolve, reject) => {
           geocoder.geocode({ location: latlng }, (results, status) => {
-            if (status === 'OK' && results && results[0]) {
+            if (status === "OK" && results && results[0]) {
               resolve(results[0].formatted_address);
             } else {
-              reject(new Error('Geocoding failed'));
+              reject(new Error("Geocoding failed"));
             }
           });
         });
@@ -173,109 +172,71 @@ const LocationInput = ({
           `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&addressdetails=1`,
           {
             headers: {
-              'User-Agent': 'CommunityConnect/1.0'
-            }
+              "User-Agent": "CommunityConnect/1.0",
+            },
           }
         );
-        
+
         if (!response.ok) {
-          throw new Error('Geocoding service unavailable');
+          throw new Error("Geocoding service unavailable");
         }
-        
+
         const data = await response.json();
-        
+
         if (data && data.display_name) {
           const address = data.address || {};
-          const city = address.city || address.town || address.village || address.hamlet;
+          const city =
+            address.city || address.town || address.village || address.hamlet;
           const state = address.state;
-          
+
           if (city && state) {
             return `${city}, ${state}`;
           }
-          
-          return data.display_name.split(',').slice(0, 3).join(',');
+
+          return data.display_name.split(",").slice(0, 3).join(",");
         }
-        
-        throw new Error('No address found');
+
+        throw new Error("No address found");
       }
     } catch (error) {
-      console.warn('Reverse geocoding failed, using coordinates:', error);
+      console.warn("Reverse geocoding failed, using coordinates:", error);
       return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
     }
   };
 
   // Clear location
   const handleClear = () => {
-    setLocation('');
+    setLocation("");
     setCoordinates({ lat: null, lng: null });
     setIsUsingGeolocation(false);
     setGeolocationError(null);
-    
+
     onLocationChange?.({
-      address: '',
+      address: "",
       lat: null,
       lng: null,
-      source: 'manual'
+      source: "manual",
     });
   };
 
   return (
-    <GoogleMapsLoader 
+    <GoogleMapsLoader
       fallback={
         <div className={`space-y-2 ${className}`}>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <MapPin className={`w-5 h-5 ${isUsingGeolocation ? 'text-blue-500' : 'text-gray-400'}`} />
-            </div>
-            
-            <input
-              type="text"
-              value={location}
-              onChange={handleLocationChange}
-              placeholder={placeholder}
-              className="block w-full pl-10 pr-20 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-              aria-label="Location input"
-            />
-            
-            <div className="absolute inset-y-0 right-0 flex items-center space-x-1 pr-2">
-              {location && (
-                <button
-                  type="button"
-                  onClick={handleClear}
-                  className="p-1 text-gray-400 hover:text-gray-600 focus:outline-none focus:text-gray-600"
-                  aria-label="Clear location"
-                >
-                  <span className="sr-only">Clear</span>
-                  ×
-                </button>
-              )}
-              
-              <button
-                type="button"
-                onClick={handleUseCurrentLocation}
-                disabled={isLoadingLocation}
-                className="p-1 text-gray-400 hover:text-blue-600 focus:outline-none focus:text-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                aria-label="Use current location"
-                title="Use current location"
-              >
-                {isLoadingLocation ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                ) : (
-                  <Crosshair className="w-4 h-4" />
-                )}
-              </button>
-            </div>
-          </div>
-          <div className="text-xs text-gray-500">Google Maps loading...</div>
+          {/* Fallback content while Google Maps loads */}
         </div>
       }
     >
       <div className={`space-y-2 ${className}`}>
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <MapPin className={`w-5 h-5 ${isUsingGeolocation ? 'text-blue-500' : 'text-gray-400'}`} />
+            <MapPin
+              className={`w-5 h-5 ${
+                isUsingGeolocation ? "text-blue-500" : "text-gray-400"
+              }`}
+            />
           </div>
-          
+
           <Autocomplete
             onLoad={(autocomplete) => {
               autocompleteRef.current = autocomplete;
@@ -292,60 +253,57 @@ const LocationInput = ({
               aria-label="Location input with autocomplete"
             />
           </Autocomplete>
-        
-        <div className="absolute inset-y-0 right-0 flex items-center space-x-1 pr-2">
-          {location && (
+
+          <div className="absolute inset-y-0 right-0 flex items-center space-x-1 pr-2">
+            {location && (
+              <button
+                type="button"
+                onClick={handleClear}
+                className="p-1 text-gray-400 hover:text-gray-600 focus:outline-none focus:text-gray-600"
+                aria-label="Clear location"
+              >
+                <span className="sr-only">Clear</span>×
+              </button>
+            )}
+
             <button
               type="button"
-              onClick={handleClear}
-              className="p-1 text-gray-400 hover:text-gray-600 focus:outline-none focus:text-gray-600"
-              aria-label="Clear location"
+              onClick={handleUseCurrentLocation}
+              disabled={isLoadingLocation}
+              className="p-1 text-gray-400 hover:text-blue-600 focus:outline-none focus:text-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Use current location"
+              title="Use current location"
             >
-              <span className="sr-only">Clear</span>
-              ×
+              {isLoadingLocation ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+              ) : (
+                <Crosshair className="w-4 h-4" />
+              )}
             </button>
-          )}
-          
-          <button
-            type="button"
-            onClick={handleUseCurrentLocation}
-            disabled={isLoadingLocation}
-            className="p-1 text-gray-400 hover:text-blue-600 focus:outline-none focus:text-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-            aria-label="Use current location"
-            title="Use current location"
-          >
-            {isLoadingLocation ? (
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-            ) : (
-              <Crosshair className="w-4 h-4" />
-            )}
-          </button>
+          </div>
+        </div>
+
+        {/* Status indicators */}
+        {isUsingGeolocation && coordinates.lat && (
+          <div className="flex items-center space-x-2 text-sm text-blue-600">
+            <MapPin className="w-4 h-4" />
+            <span>Using your current location</span>
+          </div>
+        )}
+
+        {geolocationError && (
+          <div className="flex items-center space-x-2 text-sm text-red-600">
+            <AlertCircle className="w-4 h-4" />
+            <span>{geolocationError}</span>
+          </div>
+        )}
+
+        {/* Helper text */}
+        <div className="text-xs text-gray-500">
+          Enter an address or city, or click the crosshair icon to use your
+          current location
         </div>
       </div>
-
-      {/* Status indicators */}
-      {isUsingGeolocation && coordinates.lat && (
-        <div className="flex items-center space-x-2 text-sm text-blue-600">
-          <MapPin className="w-4 h-4" />
-          <span>Using your current location</span>
-          <span className="text-xs text-gray-500">
-            ({coordinates.lat.toFixed(4)}, {coordinates.lng.toFixed(4)})
-          </span>
-        </div>
-      )}
-
-      {geolocationError && (
-        <div className="flex items-center space-x-2 text-sm text-red-600">
-          <AlertCircle className="w-4 h-4" />
-          <span>{geolocationError}</span>
-        </div>
-      )}
-
-      {/* Helper text */}
-      <div className="text-xs text-gray-500">
-        Enter an address or city, or click the crosshair icon to use your current location
-      </div>
-    </div>
     </GoogleMapsLoader>
   );
 };

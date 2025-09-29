@@ -75,37 +75,7 @@ resource "google_secret_manager_secret_iam_member" "db_password_access" {
   member    = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
-# Update Cloud Run service with secret environment variables
-resource "google_cloud_run_service" "backend" {
-  # ... existing configuration ...
-
-  template {
-    spec {
-      containers {
-        # ... existing container configuration ...
-
-        env {
-          name = "DJANGO_SECRET_KEY"
-          value_from {
-            secret_key_ref {
-              name = google_secret_manager_secret.django_secret.secret_id
-              key  = "latest"
-            }
-          }
-        }
-        env {
-          name = "DB_PASSWORD"
-          value_from {
-            secret_key_ref {
-              name = google_secret_manager_secret.db_password.secret_id
-              key  = "latest"
-            }
-          }
-        }
-      }
-    }
-  }
-}
+# IAM for Cloud Run to access secrets is already defined above
 
 # Cloud Monitoring for secret access metrics
 resource "google_monitoring_dashboard" "secrets" {

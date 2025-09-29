@@ -23,6 +23,16 @@ resource "google_cloud_run_service" "backend" {
         }
 
         env {
+          name = "DJANGO_SECRET_KEY"
+          value_from {
+            secret_key_ref {
+              name = google_secret_manager_secret.django_secret.secret_id
+              key  = "latest"
+            }
+          }
+        }
+
+        env {
           name = "DATABASE_URL"
           value_from {
             secret_key_ref {
