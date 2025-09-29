@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { GoogleMap, MarkerF, InfoWindowF } from '@react-google-maps/api';
 import { MarkerClusterer } from '@googlemaps/markerclusterer';
+import { useSpring, animated } from '@react-spring/web';
 import { APP_CONFIG } from '../config/api';
 import { getProviderAddress } from '../utils/mapUtils';
 import { useGoogleMaps } from '../hooks/useGoogleMaps';
 import GoogleMapsLoader from './GoogleMapsLoader';
+import { useScale } from '../utils/animations';
 
 const ProvidersMap = ({ 
   providers = [], 

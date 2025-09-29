@@ -23,7 +23,7 @@ jobs:
     strategy:
       matrix:
         service: [backend, frontend]
-    
+
     steps:
       - uses: actions/checkout@v3
 
@@ -31,16 +31,16 @@ jobs:
         if: matrix.service == 'backend'
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: "3.11"
+          cache: "pip"
 
       - name: Set up Node.js
         if: matrix.service == 'frontend'
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: 'frontend/package-lock.json'
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: "frontend/package-lock.json"
 
       - name: Install dependencies (backend)
         if: matrix.service == 'backend'
@@ -76,7 +76,7 @@ jobs:
       matrix:
         service: [backend, frontend]
         platform: [aws, gcp]
-    
+
     steps:
       - uses: actions/checkout@v3
 
@@ -124,7 +124,7 @@ jobs:
     environment:
       name: production
       url: ${{ steps.deploy.outputs.app_url }}
-    
+
     steps:
       - uses: actions/checkout@v3
 

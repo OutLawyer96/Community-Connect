@@ -1,8 +1,10 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { Autocomplete } from '@react-google-maps/api';
 import { MapPin, Crosshair, AlertCircle } from 'lucide-react';
+import { useSpring, animated } from '@react-spring/web';
 import { APP_CONFIG } from '../config/api';
 import GoogleMapsLoader from './GoogleMapsLoader';
+import { useFadeIn } from '../utils/animations';
 
 /**
  * LocationInput Component
