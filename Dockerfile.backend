@@ -1,0 +1,74 @@
+# Multi-stage build for optimized Django backend image
+FROM python:3.11-slim AS builder
+
+# Install system dependencies including GDAL/GEOS for PostGIS
+RUN apt-get update && apt-get install -y \
+    gdal-bin \
+    libgdal-dev \
+    libgeos-dev \
+    postgresql-client \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user for security
+RUN useradd -m -r appuser
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for better layer caching
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Set proper permissions
+RUN chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
+
+# Production stage
+FROM python:3.11-slim
+
+# Install runtime system dependencies
+RUN apt-get update && apt-get install -y \
+    gdal-bin \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -m -r appuser
+
+# Copy installed dependencies and application from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /app /app
+
+# Set working directory
+WORKDIR /app
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    DJANGO_SETTINGS_MODULE=backend.settings \
+    PORT=8000
+
+# Switch to non-root user
+USER appuser
+
+# Health check endpoint
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/health/ || exit 1
+
+# Expose port
+EXPOSE ${PORT}
+
+# Set container metadata labels
+LABEL maintainer="Community Connect Team" \
+      version="1.0" \
+      description="Django backend for Community Connect application"
+
+# Run gunicorn with optimal worker configuration
+CMD ["gunicorn", "--config", "config/gunicorn.conf.py", "backend.wsgi:application"]

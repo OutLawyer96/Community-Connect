@@ -4,7 +4,7 @@ from django.db.models import Q, Avg, Count, Case, When, FloatField, Value
 from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank
 from django.utils import timezone
 from rest_framework import generics, status, permissions
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -13,11 +13,14 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.throttling import UserRateThrottle, AnonRateThrottle
 import math
 
-from .models import Category, Provider, User, Service, Address, Review, Favorite, Claim, Availability
+from .models import Category, Provider, User, Service, Address, Review, Favorite, Claim, Availability, Notification, NotificationPreference, MessageThread, Message, UserBehavior, UserRecommendation, ABTestVariant
 from .serializers import (
     CategorySerializer, ProviderSerializer, ProviderListSerializer, 
-    UserSerializer, ServiceSerializer, AddressSerializer, 
-    ReviewSerializer, LoginSerializer, ClaimSerializer, ClaimCreateSerializer
+    UserSerializer, UserProfileSerializer, ServiceSerializer, AddressSerializer, 
+    ReviewSerializer, UserReviewSerializer, LoginSerializer, ClaimSerializer, ClaimCreateSerializer,
+    FavoriteSerializer, ProviderAnalyticsSerializer, NotificationSerializer, NotificationPreferenceSerializer,
+    MessageThreadSerializer, MessageSerializer, MessageCreateSerializer, UserBehaviorSerializer,
+    RecommendationSerializer, ABTestVariantSerializer, EnhancedProviderListSerializer
 )
 from .permissions import ClaimCreatePermission, ClaimOwnerPermission
 from .utils import send_claim_verification_email, approve_claim as approve_claim_util, reject_claim as reject_claim_util
@@ -60,6 +63,17 @@ class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = 'page_size'
     max_page_size = 100
+
+    def get_paginated_response(self, data):
+        return Response({
+            'links': {
+                'next': self.get_next_link(),
+                'previous': self.get_previous_link()
+            },
+            'count': self.page.paginator.count,
+            'total_pages': self.page.paginator.num_pages,
+            'results': data
+        })
 
 # API Root View
 @api_view(['GET'])
@@ -337,6 +351,28 @@ class ProviderListView(generics.ListAPIView):
     permission_classes = [AllowAny]
     pagination_class = StandardResultsSetPagination
     
+    def list(self, request, *args, **kwargs):
+        # Log search behavior for authenticated users
+        if request.user.is_authenticated:
+            search_query = request.query_params.get('search')
+            category = request.query_params.get('category')
+            lat = request.query_params.get('lat')
+            lng = request.query_params.get('lng')
+            
+            # Only log if there's a search query or location-based search
+            if search_query or (lat and lng):
+                UserBehavior.objects.create(
+                    user=request.user,
+                    action_type='search',
+                    search_query=search_query,
+                    category_id=category if category else None,
+                    location_lat=float(lat) if lat else None,
+                    location_lng=float(lng) if lng else None,
+                    session_id=request.session.session_key
+                )
+        
+        return super().list(request, *args, **kwargs)
+    
     def get_queryset(self):
         queryset = Provider.objects.filter(is_active=True)
         
@@ -380,12 +416,12 @@ class ProviderListView(generics.ListAPIView):
         # Filter by city
         city = self.request.query_params.get('city', None)
         if city:
-            queryset = queryset.filter(addresses__city__icontains=city)
+            queryset = queryset.filter(addresses__city__icontains=city).distinct()
         
         # Filter by state
         state = self.request.query_params.get('state', None)
         if state:
-            queryset = queryset.filter(addresses__state__icontains=state)
+            queryset = queryset.filter(addresses__state__icontains=state).distinct()
         
         # Filter by claimed status
         is_claimed = self.request.query_params.get('is_claimed')
@@ -538,16 +574,19 @@ class ProviderListView(generics.ListAPIView):
             except (ValueError, TypeError):
                 pass
         
+        # Always add review and rating annotations for sorting and serialization
+        queryset = queryset.annotate(
+            annotated_review_count=Count('reviews', distinct=True),
+            annotated_avg_rating=Avg('reviews__rating')
+        )
+
         # Sorting functionality
         ordering = self.request.query_params.get('ordering', None)
         valid_orderings = ['distance', '-distance', 'rating', '-rating', 'price', '-price', 'relevance', 'name', '-name']
         
         if ordering and ordering in valid_orderings:
             if ordering in ['rating', '-rating']:
-                # Check if avg_rating already exists from min_rating filter
-                if 'avg_rating' not in [f.name for f in queryset.query.annotations]:
-                    queryset = queryset.annotate(avg_rating=Avg('reviews__rating'))
-                queryset = queryset.order_by('avg_rating' if ordering == 'rating' else '-avg_rating')
+                queryset = queryset.order_by('annotated_avg_rating' if ordering == 'rating' else '-annotated_avg_rating')
             elif ordering in ['price', '-price']:
                 from django.db.models import Min
                 queryset = queryset.annotate(min_price=Min('services__price'))
@@ -582,9 +621,7 @@ class ProviderListView(generics.ListAPIView):
                     queryset = queryset.order_by('distance' if ordering == 'distance' else '-distance')
         else:
             # Default ordering: claimed providers first, then by rating
-            if 'avg_rating' not in [f.name for f in queryset.query.annotations]:
-                queryset = queryset.annotate(avg_rating=Avg('reviews__rating'))
-            queryset = queryset.order_by('-is_claimed', '-avg_rating')
+            queryset = queryset.order_by('-is_claimed', '-annotated_avg_rating')
         
         return queryset.distinct()
 
@@ -702,6 +739,22 @@ class ProviderDetailView(generics.RetrieveAPIView):
     queryset = Provider.objects.filter(is_active=True)
     serializer_class = ProviderSerializer
     permission_classes = [AllowAny]
+    
+    def retrieve(self, request, *args, **kwargs):
+        # Log user behavior for provider view
+        response = super().retrieve(request, *args, **kwargs)
+        
+        # Only log behavior for authenticated users
+        if request.user.is_authenticated:
+            provider = self.get_object()
+            UserBehavior.objects.create(
+                user=request.user,
+                action_type='view',
+                provider=provider,
+                session_id=request.session.session_key
+            )
+        
+        return response
 
 class ProviderCreateView(generics.CreateAPIView):
     queryset = Provider.objects.all()
@@ -767,7 +820,22 @@ class ReviewListView(generics.ListAPIView):
     
     def get_queryset(self):
         provider_id = self.kwargs.get('provider_id')
-        return Review.objects.filter(provider_id=provider_id)
+        user = self.request.user
+        base_query = Review.objects.filter(provider_id=provider_id)
+
+        # Staff can see all reviews
+        if user.is_staff:
+            return base_query
+
+        # Authenticated users can see their own reviews regardless of status
+        if user.is_authenticated:
+            return base_query.filter(
+                Q(status='approved') |  # Public reviews
+                Q(user=user)  # User's own reviews
+            )
+
+        # Non-authenticated users can only see approved reviews
+        return base_query.filter(status='approved')
 
 class ReviewCreateView(generics.CreateAPIView):
     queryset = Review.objects.all()
@@ -852,6 +920,8 @@ def search_providers(request):
 def user_dashboard(request):
     """Get user's dashboard data"""
     user = request.user
+    
+    # Base user data
     data = {
         'user': UserSerializer(user).data,
         'reviews_count': user.reviews.count(),
@@ -859,14 +929,204 @@ def user_dashboard(request):
         'claims_count': user.claims.count() if hasattr(user, 'claims') else 0,
     }
     
+    # Add recent reviews
+    recent_reviews = user.reviews.select_related('provider').order_by('-created_at')[:5]
+    data['recent_reviews'] = [{
+        'id': review.id,
+        'provider_id': review.provider.id,
+        'provider_name': review.provider.business_name,
+        'rating': review.rating,
+        'comment': review.comment,
+        'created_at': review.created_at
+    } for review in recent_reviews]
+    
+    # Add recent favorites
+    recent_favorites = user.favorites.select_related('provider').order_by('-created_at')[:5]
+    data['recent_favorites'] = [{
+        'id': favorite.id,
+        'provider_id': favorite.provider.id,
+        'provider_name': favorite.provider.business_name,
+        'created_at': favorite.created_at
+    } for favorite in recent_favorites]
+    
     if user.role == 'provider':
         try:
             provider = user.provider
             data['provider'] = ProviderSerializer(provider).data
+            
+            # Add provider analytics summary
+            total_reviews = provider.reviews.count()
+            avg_rating = provider.reviews.aggregate(Avg('rating'))['rating__avg']
+            total_services = provider.services.filter(is_active=True).count()
+            total_favorites = provider.favorited_by.count()
+            
+            # Recent review trend (last 30 days vs previous 30 days)
+            from datetime import datetime, timedelta
+            thirty_days_ago = timezone.now() - timedelta(days=30)
+            sixty_days_ago = timezone.now() - timedelta(days=60)
+            
+            recent_reviews_count = provider.reviews.filter(created_at__gte=thirty_days_ago).count()
+            previous_reviews_count = provider.reviews.filter(
+                created_at__gte=sixty_days_ago, 
+                created_at__lt=thirty_days_ago
+            ).count()
+            
+            data['provider_analytics'] = {
+                'total_reviews': total_reviews,
+                'average_rating': round(avg_rating, 1) if avg_rating else None,
+                'total_services': total_services,
+                'total_favorites': total_favorites,
+                'recent_trend': {
+                    'recent_count': recent_reviews_count,
+                    'previous_count': previous_reviews_count,
+                    'trend': 'up' if recent_reviews_count > previous_reviews_count else 'down' if recent_reviews_count < previous_reviews_count else 'stable'
+                }
+            }
         except Provider.DoesNotExist:
             data['provider'] = None
     
     return Response(data)
+
+
+# Profile Views
+class ProfileUpdateView(generics.UpdateAPIView):
+    """Update user profile with multipart support for avatar uploads"""
+    serializer_class = UserProfileSerializer
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    
+    def get_object(self):
+        return self.request.user
+
+
+# Favorites Views
+class FavoriteToggleView(generics.GenericAPIView):
+    """Toggle favorite status for a provider"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        provider_id = request.data.get('provider_id')
+        
+        if not provider_id:
+            return Response({'error': 'provider_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            provider = Provider.objects.get(id=provider_id, is_active=True)
+        except Provider.DoesNotExist:
+            return Response({'error': 'Provider not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        favorite, created = Favorite.objects.get_or_create(
+            user=request.user,
+            provider=provider
+        )
+        
+        if not created:
+            favorite.delete()
+            return Response({'favorited': False, 'message': 'Removed from favorites'})
+        else:
+            return Response({'favorited': True, 'message': 'Added to favorites'})
+
+
+class FavoriteListView(generics.ListAPIView):
+    """List user's favorite providers"""
+    serializer_class = FavoriteSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
+    
+    def get_queryset(self):
+        return Favorite.objects.filter(user=self.request.user).select_related('provider').order_by('-created_at')
+
+
+# User Reviews Views
+class UserReviewListView(generics.ListAPIView):
+    """List user's reviews"""
+    serializer_class = UserReviewSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
+    
+    def get_queryset(self):
+        return Review.objects.filter(user=self.request.user).select_related('provider').order_by('-created_at')
+
+
+# Provider Analytics Views
+class ProviderAnalyticsView(generics.GenericAPIView):
+    """Get analytics data for a provider"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, pk):
+        try:
+            provider = Provider.objects.get(pk=pk, is_active=True)
+        except Provider.DoesNotExist:
+            return Response({'error': 'Provider not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if user owns this provider or is staff
+        if provider.user != request.user and not request.user.is_staff:
+            return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Basic analytics
+        total_reviews = provider.reviews.count()
+        average_rating = provider.reviews.aggregate(Avg('rating'))['rating__avg']
+        total_services = provider.services.filter(is_active=True).count()
+        total_favorites = provider.favorited_by.count()
+        
+        # Rating distribution
+        rating_distribution = {}
+        for i in range(1, 6):
+            rating_distribution[str(i)] = provider.reviews.filter(rating=i).count()
+        
+        # Monthly review counts (last 12 months)
+        from datetime import datetime, timedelta
+        from django.db.models import Count
+        from django.db.models.functions import TruncMonth
+        
+        twelve_months_ago = timezone.now() - timedelta(days=365)
+        monthly_reviews = provider.reviews.filter(
+            created_at__gte=twelve_months_ago
+        ).annotate(
+            month=TruncMonth('created_at')
+        ).values('month').annotate(
+            count=Count('id')
+        ).order_by('month')
+        
+        monthly_review_counts = [{
+            'month': item['month'].strftime('%Y-%m'),
+            'count': item['count']
+        } for item in monthly_reviews]
+        
+        # Recent reviews trend (detailed)
+        from django.db.models import Q
+        now = timezone.now()
+        periods = [
+            ('last_7_days', now - timedelta(days=7)),
+            ('last_30_days', now - timedelta(days=30)),
+            ('last_90_days', now - timedelta(days=90))
+        ]
+        
+        recent_reviews_trend = []
+        for period_name, start_date in periods:
+            count = provider.reviews.filter(created_at__gte=start_date).count()
+            avg_rating = provider.reviews.filter(created_at__gte=start_date).aggregate(
+                Avg('rating')
+            )['rating__avg']
+            recent_reviews_trend.append({
+                'period': period_name,
+                'count': count,
+                'average_rating': round(avg_rating, 1) if avg_rating else None
+            })
+        
+        analytics_data = {
+            'provider_id': provider.id,
+            'business_name': provider.business_name,
+            'total_reviews': total_reviews,
+            'average_rating': round(average_rating, 1) if average_rating else None,
+            'total_services': total_services,
+            'total_favorites': total_favorites,
+            'rating_distribution': rating_distribution,
+            'monthly_review_counts': monthly_review_counts,
+            'recent_reviews_trend': recent_reviews_trend
+        }
+        
+        return Response(analytics_data)
 
 
 # =====================
@@ -991,7 +1251,7 @@ def verify_claim_email(request, claim_id):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def unclaimed_providers(request):
     """
     Get list of unclaimed providers that can be claimed with enhanced filtering
@@ -1168,3 +1428,309 @@ def reject_claim(request, claim_id):
             {'error': f'Error rejecting claim: {str(e)}'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+# Notification Views
+class NotificationListView(generics.ListAPIView):
+    """List user's notifications with filtering and pagination"""
+    serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = PageNumberPagination
+    
+    def get_queryset(self):
+        queryset = Notification.objects.filter(user=self.request.user).select_related('content_type')
+        
+        # Filter by read status
+        is_read = self.request.query_params.get('is_read')
+        if is_read is not None:
+            queryset = queryset.filter(is_read=is_read.lower() == 'true')
+        
+        # Filter by notification type
+        notification_type = self.request.query_params.get('type')
+        if notification_type:
+            queryset = queryset.filter(notification_type=notification_type)
+        
+        return queryset.order_by('-created_at')
+
+
+class NotificationMarkReadView(generics.GenericAPIView):
+    """Mark single or multiple notifications as read"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        notification_ids = request.data.get('notification_ids', [])
+        
+        if not notification_ids:
+            # Mark all notifications as read
+            updated_count = Notification.objects.filter(
+                user=request.user, 
+                is_read=False
+            ).update(is_read=True)
+        else:
+            # Mark specific notifications as read
+            updated_count = Notification.objects.filter(
+                user=request.user,
+                id__in=notification_ids,
+                is_read=False
+            ).update(is_read=True)
+        
+        return Response({
+            'message': f'{updated_count} notifications marked as read',
+            'updated_count': updated_count
+        })
+
+
+class NotificationStatsView(generics.GenericAPIView):
+    """Get unread notification counts by type"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        user_notifications = Notification.objects.filter(user=request.user, is_read=False)
+        
+        stats = {
+            'total_unread': user_notifications.count(),
+            'by_type': {
+                'review': user_notifications.filter(notification_type='review').count(),
+                'claim': user_notifications.filter(notification_type='claim').count(),
+                'message': user_notifications.filter(notification_type='message').count(),
+                'system': user_notifications.filter(notification_type='system').count(),
+            }
+        }
+        
+        return Response(stats)
+
+
+class NotificationPreferenceView(generics.RetrieveUpdateAPIView):
+    """Manage user notification preferences"""
+    serializer_class = NotificationPreferenceSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_object(self):
+        # Get or create notification preferences for the user
+        preference, created = NotificationPreference.objects.get_or_create(
+            user=self.request.user,
+            defaults={
+                'email_for_reviews': True,
+                'email_for_claims': True,
+                'email_for_messages': True,
+                'email_for_system': True,
+                'in_app_enabled': True,
+            }
+        )
+        return preference
+
+
+# Messaging Views
+class MessageThreadListView(generics.ListAPIView):
+    """List user's message threads with pagination"""
+    serializer_class = MessageThreadSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = PageNumberPagination
+    
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == 'customer':
+            return MessageThread.objects.filter(customer=user).order_by('-updated_at')
+        elif user.role == 'provider':
+            return MessageThread.objects.filter(provider=user).order_by('-updated_at')
+        else:
+            return MessageThread.objects.none()
+
+
+class MessageThreadDetailView(generics.ListAPIView):
+    """List messages for a specific thread"""
+    serializer_class = MessageSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = PageNumberPagination
+    
+    def get_queryset(self):
+        user = self.request.user
+        thread_id = self.kwargs.get('pk')
+        
+        # Verify user has access to this thread
+        try:
+            if user.role == 'customer':
+                thread = MessageThread.objects.get(id=thread_id, customer=user)
+            elif user.role == 'provider':
+                thread = MessageThread.objects.get(id=thread_id, provider=user)
+            else:
+                return Message.objects.none()
+            
+            # Mark messages as read for current user
+            thread.messages.exclude(sender=user).filter(is_read=False).update(is_read=True)
+            
+            return thread.messages.all().order_by('created_at')
+        except MessageThread.DoesNotExist:
+            return Message.objects.none()
+    
+    @action(detail=True, methods=['patch'])
+    def mark_read(self, request, pk=None):
+        """Mark all messages in thread as read for current user"""
+        user = request.user
+        try:
+            if user.role == 'customer':
+                thread = MessageThread.objects.get(id=pk, customer=user)
+            elif user.role == 'provider':
+                thread = MessageThread.objects.get(id=pk, provider=user)
+            else:
+                return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+            
+            # Mark all messages from other participant as read
+            thread.messages.exclude(sender=user).filter(is_read=False).update(is_read=True)
+            
+            return Response({'message': 'Messages marked as read'})
+        except MessageThread.DoesNotExist:
+            return Response({'error': 'Thread not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class MessageCreateView(generics.CreateAPIView):
+    """Send a message"""
+    serializer_class = MessageCreateSerializer
+    permission_classes = [IsAuthenticated]
+    throttle_scope = 'messaging'
+    
+    def perform_create(self, serializer):
+        message = serializer.save()
+        
+        # Create notification for recipient
+        from .utils.notification_utils import create_notification
+        recipient = message.thread.get_other_participant(self.request.user)
+        
+        create_notification(
+            user=recipient,
+            notification_type='message',
+            title=f'New message from {self.request.user.get_full_name() or self.request.user.username}',
+            message=f'You have received a new message: {message.content[:100]}...' if len(message.content) > 100 else message.content,
+            related_object=message
+        )
+        
+        return message
+
+
+class PersonalizedRecommendationsView(generics.ListAPIView):
+    """Get personalized recommendations for authenticated users"""
+    serializer_class = RecommendationSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
+    
+    def get_queryset(self):
+        user = self.request.user
+        
+        # Get cached recommendations that haven't expired
+        recommendations = UserRecommendation.objects.filter(
+            user=user,
+            expires_at__gt=timezone.now()
+        ).select_related('provider').order_by('-score')
+        
+        # Limit to top 20 recommendations
+        return recommendations[:20]
+    
+    def list(self, request, *args, **kwargs):
+        # Try to get cached recommendations first
+        queryset = self.get_queryset()
+        
+        if not queryset.exists():
+            # Fallback to basic category-based recommendations if no personalized ones exist
+            # Get user's favorite categories based on their behavior
+            favorite_categories = UserBehavior.objects.filter(
+                user=request.user,
+                category__isnull=False
+            ).values('category').annotate(
+                count=Count('category')
+            ).order_by('-count')[:3]
+            
+            if favorite_categories:
+                category_ids = [cat['category'] for cat in favorite_categories]
+                basic_recommendations = Provider.objects.filter(
+                    is_active=True,
+                    services__category__in=category_ids
+                ).annotate(
+                    avg_rating=Avg('reviews__rating')
+                ).order_by('-avg_rating')[:10]
+                
+                # Convert to recommendation format
+                from datetime import timedelta
+                recommendations_data = []
+                for provider in basic_recommendations:
+                    recommendations_data.append({
+                        'provider': provider,
+                        'recommendation_score': provider.avg_rating or 3.0,
+                        'algorithm_version': 'basic_fallback',
+                        'confidence_level': 'low',
+                        'explanation': 'Recommended based on popular providers in your preferred categories',
+                        'created_at': timezone.now()
+                    })
+                
+                # Use custom serialization for basic recommendations
+                page = self.paginate_queryset(recommendations_data)
+                if page is not None:
+                    # Create temporary objects for serialization
+                    temp_recommendations = []
+                    for rec_data in page:
+                        temp_rec = type('TempRecommendation', (), rec_data)
+                        temp_recommendations.append(temp_rec)
+                    
+                    serializer = self.get_serializer(temp_recommendations, many=True)
+                    return self.get_paginated_response(serializer.data)
+        
+        return super().list(request, *args, **kwargs)
+
+
+class LogUserBehaviorView(generics.CreateAPIView):
+    """Explicitly log user behavior events"""
+    serializer_class = UserBehaviorSerializer
+    permission_classes = [IsAuthenticated]
+    throttle_scope = 'behavior_logging'
+    
+    def perform_create(self, serializer):
+        serializer.save(
+            user=self.request.user,
+            session_id=self.request.session.session_key
+        )
+        
+        # Invalidate user recommendations cache when significant behavior occurs
+        action_type = serializer.validated_data.get('action_type')
+        if action_type in ['favorite', 'contact']:
+            # Delete cached recommendations to trigger rebuild
+            UserRecommendation.objects.filter(
+                user=self.request.user,
+                expires_at__gt=timezone.now()
+            ).delete()
+
+
+class ABTestAssignmentView(generics.CreateAPIView):
+    """Assign user to A/B test variant"""
+    serializer_class = ABTestVariantSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def create(self, request, *args, **kwargs):
+        experiment_name = request.data.get('experiment_name')
+        
+        if not experiment_name:
+            return Response(
+                {'error': 'experiment_name is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if user already has assignment for this experiment
+        existing_assignment = ABTestVariant.objects.filter(
+            user=request.user,
+            experiment_name=experiment_name
+        ).first()
+        
+        if existing_assignment:
+            serializer = self.get_serializer(existing_assignment)
+            return Response(serializer.data)
+        
+        # Assign user to variant using consistent hashing
+        from .utils.ab_testing import assign_user_to_variant
+        variant = assign_user_to_variant(request.user, experiment_name)
+        
+        ab_test_variant = ABTestVariant.objects.create(
+            user=request.user,
+            experiment_name=experiment_name,
+            variant=variant
+        )
+        
+        serializer = self.get_serializer(ab_test_variant)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)

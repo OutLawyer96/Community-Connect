@@ -1,0 +1,227 @@
+/* Notifications page specific styles */
+.notification-item {
+  transition: background-color 0.2s ease;
+}
+
+.notification-item:hover {
+  background-color: #f9fafb;
+}
+
+.notification-item.unread {
+  background-color: #eff6ff;
+  border-left: 4px solid #3b82f6;
+}
+
+.notification-checkbox {
+  appearance: none;
+  background-color: white;
+  border: 2px solid #d1d5db;
+  border-radius: 4px;
+  width: 16px;
+  height: 16px;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.notification-checkbox:checked {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.notification-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.notification-filter-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.notification-filter-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  transition: left 0.5s ease;
+}
+
+.notification-filter-button:hover::before {
+  left: 100%;
+}
+
+.notification-icon-wrapper {
+  position: relative;
+}
+
+.notification-icon-wrapper::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 32px;
+  height: 32px;
+  background-color: currentColor;
+  border-radius: 50%;
+  opacity: 0.1;
+  transform: translate(-50%, -50%);
+}
+
+.notification-type-review {
+  color: #f59e0b;
+}
+
+.notification-type-claim {
+  color: #3b82f6;
+}
+
+.notification-type-message {
+  color: #10b981;
+}
+
+.notification-type-system {
+  color: #8b5cf6;
+}
+
+.notification-action-button {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.notification-item:hover .notification-action-button {
+  opacity: 1;
+}
+
+.notification-bulk-actions {
+  background: linear-gradient(90deg, #f3f4f6, #ffffff);
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.notification-group-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: #f9fafb;
+  backdrop-filter: blur(8px);
+}
+
+.notification-empty-state {
+  background: radial-gradient(circle at center, #f8fafc, #ffffff);
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .notification-item.unread {
+    background-color: #1e3a8a;
+    border-left-color: #60a5fa;
+  }
+  
+  .notification-checkbox {
+    background-color: #374151;
+    border-color: #4b5563;
+  }
+  
+  .notification-checkbox:checked {
+    background-color: #3b82f6;
+    border-color: #3b82f6;
+  }
+}
+
+/* Animation for new notifications */
+@keyframes notification-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.notification-item.new {
+  animation: notification-slide-in 0.3s ease-out;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .notification-actions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .notification-filters {
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+  
+  .notification-bulk-actions {
+    padding: 0.75rem;
+  }
+}
+
+/* Loading states */
+.notification-skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Focus styles for accessibility */
+.notification-item:focus-within {
+  outline: 2px solid #3b82f6;
+  outline-offset: -2px;
+}
+
+.notification-filter-button:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Smooth transitions */
+.notification-content {
+  transition: all 0.2s ease;
+}
+
+.notification-item:hover .notification-content {
+  transform: translateX(2px);
+}
+
+/* Status indicators */
+.notification-status-indicator {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #3b82f6;
+}
+
+.notification-status-indicator.unread {
+  background-color: #ef4444;
+}
+
+.notification-status-indicator.read {
+  background-color: #10b981;
+}

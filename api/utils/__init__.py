@@ -13,7 +13,7 @@ from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.db import transaction
-from .models import Claim, Provider
+from ..models import Claim, Provider
 
 
 def generate_verification_token(length=32):

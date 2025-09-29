@@ -1,0 +1,84 @@
+{% extends "email/base.html" %}
+
+{% block title %}New Review Received - Community Connect{% endblock %}
+
+{% block content %}
+<div class="message-content">
+    <p>Great news! You've received a new review for your business.</p>
+</div>
+
+{% if review %}
+<div class="highlight-box">
+    <h3 style="margin-top: 0; color: #1f2937;">Review Details</h3>
+    
+    <div style="margin: 15px 0;">
+        <strong>Rating:</strong>
+        <div class="stars">
+            {% for i in "12345" %}
+                {% if forloop.counter <= review.rating %}
+                    ⭐
+                {% else %}
+                    ☆
+                {% endif %}
+            {% endfor %}
+            ({{ review.rating }}/5 stars)
+        </div>
+    </div>
+    
+    <div style="margin: 15px 0;">
+        <strong>From:</strong> {{ review.user.get_full_name|default:review.user.username }}
+    </div>
+    
+    {% if review.comment %}
+    <div style="margin: 15px 0;">
+        <strong>Review:</strong>
+        <div style="background-color: #ffffff; padding: 15px; border-radius: 6px; border-left: 3px solid #3b82f6; margin-top: 10px; font-style: italic;">
+            "{{ review.comment }}"
+        </div>
+    </div>
+    {% endif %}
+    
+    <div style="margin: 15px 0;">
+        <strong>Date:</strong> {{ review.created_at|date:"F j, Y" }}
+    </div>
+</div>
+
+<div class="content-block">
+    <h4 style="margin-top: 0; color: #1f2937;">Why Reviews Matter</h4>
+    <ul style="margin: 0; padding-left: 20px; color: #4b5563;">
+        <li>Build trust with potential customers</li>
+        <li>Improve your business visibility</li>
+        <li>Get valuable feedback to enhance your services</li>
+        <li>Increase your average rating and ranking</li>
+    </ul>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block call_to_action %}
+<div style="text-align: center; margin: 30px 0;">
+    {% if dashboard_url %}
+    <a href="{{ dashboard_url }}" class="btn-primary">View Your Dashboard</a>
+    {% endif %}
+    
+    {% if business_name %}
+    <a href="{{ site_url }}/providers?search={{ business_name }}" class="btn-secondary">View Your Public Profile</a>
+    {% endif %}
+</div>
+
+<div class="content-block">
+    <h4 style="margin-top: 0; color: #1f2937;">💡 Pro Tips for Managing Reviews</h4>
+    <ul style="margin: 0; padding-left: 20px; color: #4b5563;">
+        <li><strong>Respond promptly:</strong> Thank customers for positive reviews</li>
+        <li><strong>Address concerns:</strong> Professionally handle any negative feedback</li>
+        <li><strong>Encourage reviews:</strong> Ask satisfied customers to share their experience</li>
+        <li><strong>Learn and improve:</strong> Use feedback to enhance your services</li>
+    </ul>
+</div>
+
+<div style="background-color: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 15px; margin: 20px 0;">
+    <p style="margin: 0; color: #92400e; font-weight: 500;">
+        <strong>🌟 Keep up the great work!</strong> Positive reviews help your business grow and attract more customers.
+    </p>
+</div>
+{% endblock %}

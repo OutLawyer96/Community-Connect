@@ -1,9 +1,12 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
+import { Autocomplete } from '@react-google-maps/api';
 import { MapPin, Crosshair, AlertCircle } from 'lucide-react';
+import { APP_CONFIG } from '../config/api';
+import GoogleMapsLoader from './GoogleMapsLoader';
 
 /**
  * LocationInput Component
- * Allows users to input location manually or use current location via geolocation
+ * Allows users to input location manually, use Google Places Autocomplete, or use current location via geolocation
  */
 const LocationInput = ({ 
   onLocationChange, 
@@ -16,6 +19,8 @@ const LocationInput = ({
   const [isUsingGeolocation, setIsUsingGeolocation] = useState(false);
   const [geolocationError, setGeolocationError] = useState(null);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+  
+  const autocompleteRef = useRef(null);
 
   // Handle manual location input
   const handleLocationChange = (e) => {
@@ -117,40 +122,80 @@ const LocationInput = ({
     );
   }, [onLocationChange]);
 
-  // Simple reverse geocoding using a free service (in production, use a proper service)
+  // Handle Google Places Autocomplete selection
+  const handlePlaceChanged = useCallback(() => {
+    const autocomplete = autocompleteRef.current;
+    if (autocomplete) {
+      const place = autocomplete.getPlace();
+      
+      if (place && place.geometry && place.geometry.location) {
+        const lat = place.geometry.location.lat();
+        const lng = place.geometry.location.lng();
+        const address = place.formatted_address || place.name;
+        
+        setLocation(address);
+        setCoordinates({ lat, lng });
+        setIsUsingGeolocation(false);
+        setGeolocationError(null);
+        
+        onLocationChange?.({
+          address,
+          lat,
+          lng,
+          source: 'autocomplete',
+          place
+        });
+      }
+    }
+  }, [onLocationChange]);
+
+  // Reverse geocode coordinates to address using Google Geocoding API
   const reverseGeocode = async (lat, lng) => {
     try {
-      // Using OpenStreetMap Nominatim for reverse geocoding (free but rate limited)
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&addressdetails=1`,
-        {
-          headers: {
-            'User-Agent': 'CommunityConnect/1.0'
+      if (window.google?.maps?.Geocoder) {
+        const geocoder = new window.google.maps.Geocoder();
+        const latlng = { lat, lng };
+        
+        return new Promise((resolve, reject) => {
+          geocoder.geocode({ location: latlng }, (results, status) => {
+            if (status === 'OK' && results && results[0]) {
+              resolve(results[0].formatted_address);
+            } else {
+              reject(new Error('Geocoding failed'));
+            }
+          });
+        });
+      } else {
+        // Fallback to OpenStreetMap Nominatim
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&addressdetails=1`,
+          {
+            headers: {
+              'User-Agent': 'CommunityConnect/1.0'
+            }
           }
-        }
-      );
-      
-      if (!response.ok) {
-        throw new Error('Geocoding service unavailable');
-      }
-      
-      const data = await response.json();
-      
-      if (data && data.display_name) {
-        // Extract city and state from the response
-        const address = data.address || {};
-        const city = address.city || address.town || address.village || address.hamlet;
-        const state = address.state;
+        );
         
-        if (city && state) {
-          return `${city}, ${state}`;
+        if (!response.ok) {
+          throw new Error('Geocoding service unavailable');
         }
         
-        // Fallback to display name but try to shorten it
-        return data.display_name.split(',').slice(0, 3).join(',');
+        const data = await response.json();
+        
+        if (data && data.display_name) {
+          const address = data.address || {};
+          const city = address.city || address.town || address.village || address.hamlet;
+          const state = address.state;
+          
+          if (city && state) {
+            return `${city}, ${state}`;
+          }
+          
+          return data.display_name.split(',').slice(0, 3).join(',');
+        }
+        
+        throw new Error('No address found');
       }
-      
-      throw new Error('No address found');
     } catch (error) {
       console.warn('Reverse geocoding failed, using coordinates:', error);
       return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
@@ -173,20 +218,78 @@ const LocationInput = ({
   };
 
   return (
-    <div className={`space-y-2 ${className}`}>
-      <div className="relative">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <MapPin className={`w-5 h-5 ${isUsingGeolocation ? 'text-blue-500' : 'text-gray-400'}`} />
+    <GoogleMapsLoader 
+      fallback={
+        <div className={`space-y-2 ${className}`}>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <MapPin className={`w-5 h-5 ${isUsingGeolocation ? 'text-blue-500' : 'text-gray-400'}`} />
+            </div>
+            
+            <input
+              type="text"
+              value={location}
+              onChange={handleLocationChange}
+              placeholder={placeholder}
+              className="block w-full pl-10 pr-20 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              aria-label="Location input"
+            />
+            
+            <div className="absolute inset-y-0 right-0 flex items-center space-x-1 pr-2">
+              {location && (
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className="p-1 text-gray-400 hover:text-gray-600 focus:outline-none focus:text-gray-600"
+                  aria-label="Clear location"
+                >
+                  <span className="sr-only">Clear</span>
+                  ×
+                </button>
+              )}
+              
+              <button
+                type="button"
+                onClick={handleUseCurrentLocation}
+                disabled={isLoadingLocation}
+                className="p-1 text-gray-400 hover:text-blue-600 focus:outline-none focus:text-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="Use current location"
+                title="Use current location"
+              >
+                {isLoadingLocation ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                ) : (
+                  <Crosshair className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+          </div>
+          <div className="text-xs text-gray-500">Google Maps loading...</div>
         </div>
-        
-        <input
-          type="text"
-          value={location}
-          onChange={handleLocationChange}
-          placeholder={placeholder}
-          className="block w-full pl-10 pr-20 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-          aria-label="Location input"
-        />
+      }
+    >
+      <div className={`space-y-2 ${className}`}>
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <MapPin className={`w-5 h-5 ${isUsingGeolocation ? 'text-blue-500' : 'text-gray-400'}`} />
+          </div>
+          
+          <Autocomplete
+            onLoad={(autocomplete) => {
+              autocompleteRef.current = autocomplete;
+            }}
+            onPlaceChanged={handlePlaceChanged}
+            options={APP_CONFIG.MAP.PLACES_OPTIONS}
+          >
+            <input
+              type="text"
+              value={location}
+              onChange={handleLocationChange}
+              placeholder={placeholder}
+              className="block w-full pl-10 pr-20 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              aria-label="Location input with autocomplete"
+            />
+          </Autocomplete>
         
         <div className="absolute inset-y-0 right-0 flex items-center space-x-1 pr-2">
           {location && (
@@ -241,6 +344,7 @@ const LocationInput = ({
         Enter an address or city, or click the crosshair icon to use your current location
       </div>
     </div>
+    </GoogleMapsLoader>
   );
 };
 

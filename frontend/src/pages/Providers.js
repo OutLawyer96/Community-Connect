@@ -14,7 +14,8 @@ function Providers() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('grid'); // 'grid', 'list', 'map'
-  const [currentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
   const [filters, setFilters] = useState(() => ({
     search: searchParams.get('search') || '',
     category: searchParams.get('category') || '',
@@ -51,9 +52,8 @@ function Providers() {
         } else if (key === 'radius') {
           // Only send radius if both lat and lng exist
           if (filters.lat && filters.lng) {
-            // Convert miles to kilometers for backend (backend expects km)
-            const radiusKm = Math.round(value * 1.60934);
-            params.append('radius', radiusKm);
+            // Radius is already in kilometers from map bounds
+            params.append('radius', value);
           }
         } else if (key === 'available_today' || key === 'verified_only') {
           if (value === true) params.append(key, 'true');
@@ -69,10 +69,12 @@ function Providers() {
       const data = response.data;
       
       setProviders(data.results || data || []);
+      setTotalPages(data.total_pages || 1);
     } catch (error) {
       if (error?.name === 'AbortError') return;
       console.error('Error fetching providers:', error);
       setProviders([]); // Set empty array as fallback
+      setTotalPages(1);
     } finally {
       setLoading(false);
     }
@@ -153,6 +155,24 @@ function Providers() {
       verified_only: false,
       ordering: '',
     });
+  };
+
+  // Handle map bounds changes for viewport-based provider loading
+  const handleBoundsChanged = (locationData) => {
+    if (!locationData) return;
+    
+    setFilters(prev => ({
+      ...prev,
+      lat: locationData.lat,
+      lng: locationData.lng,
+      radius: locationData.radiusKm
+    }));
+  };
+
+  const handlePageChange = (newPage) => {
+    if (newPage > 0 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
   };
 
   const ProviderCard = ({ provider }) => (
@@ -330,11 +350,48 @@ function Providers() {
             Find Service Providers
           </h1>
           
-          {/* Advanced Search Filters */}
-          <SearchFilters 
+          {/* Advanced Search Filters - Temporarily disabled */}
+          {/* <SearchFilters 
             categories={categories}
             onSearch={handleSearchFilters}
-          />
+          /> */}
+          
+          {/* Temporary Basic Filters */}
+          <div className="bg-gray-50 rounded-xl p-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="Search services..."
+                  value={filters.search}
+                  onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+              </div>
+              
+              <select
+                value={filters.category}
+                onChange={(e) => setFilters(prev => ({ ...prev, category: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                <option value="">All Categories</option>
+                {(categories || []).map(category => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+              
+              <input
+                type="text"
+                placeholder="City"
+                value={filters.city}
+                onChange={(e) => setFilters(prev => ({ ...prev, city: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+            </div>
+          </div>
           
           {/* View Mode Controls */}
           <div className="flex items-center justify-end space-x-2 mt-4">
@@ -396,7 +453,10 @@ function Providers() {
                       <h3 className="text-lg font-semibold text-gray-900 mb-4">
                         Service Providers in India
                       </h3>
-                      <ProvidersMap providers={providers} />
+                      <ProvidersMap 
+                        providers={providers} 
+                        onBoundsChanged={handleBoundsChanged}
+                      />
                     </div>
                     
                     {/* Provider count below map */}
@@ -419,6 +479,29 @@ function Providers() {
                         <ProviderListItem key={index} provider={provider} />
                       )
                     ))}
+                  </div>
+                )}
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center mt-8">
+                    <button
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="px-4 py-2 mx-1 bg-white border border-gray-300 rounded-lg disabled:opacity-50"
+                    >
+                      Previous
+                    </button>
+                    <span className="px-4 py-2 mx-1">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <button
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="px-4 py-2 mx-1 bg-white border border-gray-300 rounded-lg disabled:opacity-50"
+                    >
+                      Next
+                    </button>
                   </div>
                 )}
               </>

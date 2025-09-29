@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en" style="margin: 0; padding: 0;">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>{% block title %}Community Connect{% endblock %}</title>
+    <!--[if mso]>
+    <noscript>
+        <xml>
+            <o:OfficeDocumentSettings>
+                <o:PixelsPerInch>96</o:PixelsPerInch>
+            </o:OfficeDocumentSettings>
+        </xml>
+    </noscript>
+    <![endif]-->
+    <style>
+        /* Reset styles */
+        body, table, td, p, a, li, blockquote {
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }
+        table, td {
+            mso-table-lspace: 0pt;
+            mso-table-rspace: 0pt;
+        }
+        img {
+            -ms-interpolation-mode: bicubic;
+        }
+        
+        /* Remove blue links for Outlook */
+        #outlook a {
+            padding: 0;
+        }
+        
+        /* Base styles */
+        body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background-color: #f7f7f7;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 16px;
+            line-height: 1.6;
+            color: #333333;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        /* Container */
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* Header */
+        .email-header {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            padding: 30px 40px;
+            text-align: center;
+        }
+        
+        .logo {
+            color: #ffffff;
+            font-size: 28px;
+            font-weight: bold;
+            text-decoration: none;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+        
+        .header-subtitle {
+            color: #e0e7ff;
+            font-size: 14px;
+            margin: 0;
+        }
+        
+        /* Main content */
+        .email-content {
+            padding: 40px;
+        }
+        
+        .greeting {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 20px;
+        }
+        
+        .message-content {
+            font-size: 16px;
+            line-height: 1.6;
+            color: #4b5563;
+            margin-bottom: 30px;
+        }
+        
+        /* Buttons */
+        .btn-primary {
+            display: inline-block;
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            color: #ffffff !important;
+            text-decoration: none;
+            padding: 14px 28px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 16px;
+            text-align: center;
+            margin: 10px 0;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-secondary {
+            display: inline-block;
+            background-color: #f3f4f6;
+            color: #374151 !important;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 14px;
+            text-align: center;
+            margin: 10px 0;
+            border: 1px solid #d1d5db;
+        }
+        
+        /* Content blocks */
+        .content-block {
+            background-color: #f9fafb;
+            border-left: 4px solid #3b82f6;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 0 6px 6px 0;
+        }
+        
+        .highlight-box {
+            background-color: #eff6ff;
+            border: 1px solid #dbeafe;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        /* Footer */
+        .email-footer {
+            background-color: #f9fafb;
+            padding: 30px 40px;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            font-size: 14px;
+            color: #6b7280;
+        }
+        
+        .footer-links {
+            margin: 20px 0;
+        }
+        
+        .footer-links a {
+            color: #3b82f6;
+            text-decoration: none;
+            margin: 0 15px;
+        }
+        
+        .footer-links a:hover {
+            text-decoration: underline;
+        }
+        
+        .unsubscribe {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-top: 20px;
+        }
+        
+        .unsubscribe a {
+            color: #6b7280;
+            text-decoration: underline;
+        }
+        
+        /* Rating stars */
+        .stars {
+            font-size: 20px;
+            color: #fbbf24;
+            margin: 10px 0;
+        }
+        
+        /* Responsive */
+        @media only screen and (max-width: 600px) {
+            .email-container {
+                margin: 0 !important;
+                border-radius: 0 !important;
+            }
+            
+            .email-header, .email-content, .email-footer {
+                padding: 20px !important;
+            }
+            
+            .btn-primary, .btn-secondary {
+                display: block !important;
+                width: 100% !important;
+                box-sizing: border-box !important;
+            }
+        }
+    </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f7f7f7;">
+    <div style="background-color: #f7f7f7; padding: 20px 0;">
+        <div class="email-container">
+            <!-- Header -->
+            <div class="email-header">
+                <a href="{{ site_url }}" class="logo">Community Connect</a>
+                <p class="header-subtitle">Connecting communities with trusted local services</p>
+            </div>
+            
+            <!-- Main Content -->
+            <div class="email-content">
+                <div class="greeting">
+                    Hello {% if user.first_name %}{{ user.first_name }}{% else %}{{ user.username }}{% endif %}!
+                </div>
+                
+                {% block content %}
+                <div class="message-content">
+                    {{ notification.message }}
+                </div>
+                {% endblock %}
+                
+                {% block call_to_action %}
+                {% endblock %}
+            </div>
+            
+            <!-- Footer -->
+            <div class="email-footer">
+                <div class="footer-links">
+                    <a href="{{ site_url }}">Home</a>
+                    <a href="{{ site_url }}/providers">Browse Providers</a>
+                    <a href="{{ site_url }}/dashboard">Dashboard</a>
+                    <a href="{{ site_url }}/help">Help Center</a>
+                </div>
+                
+                <p style="margin: 0; color: #6b7280;">
+                    Community Connect - Your trusted local service marketplace
+                </p>
+                
+                {% if unsubscribe_url %}
+                <div class="unsubscribe">
+                    <a href="{{ unsubscribe_url }}">Manage notification preferences</a> | 
+                    <a href="mailto:support@communityconnect.com">Contact Support</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>

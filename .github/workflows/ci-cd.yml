@@ -1,0 +1,161 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY_AWS: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+  REGISTRY_GCP: gcr.io/${{ secrets.GCP_PROJECT_ID }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [backend, frontend]
+    
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        if: matrix.service == 'backend'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Set up Node.js
+        if: matrix.service == 'frontend'
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Install dependencies (backend)
+        if: matrix.service == 'backend'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pylint
+
+      - name: Install dependencies (frontend)
+        if: matrix.service == 'frontend'
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Run tests (backend)
+        if: matrix.service == 'backend'
+        run: |
+          pytest --cov=./ --cov-report=xml
+          pylint **/*.py
+
+      - name: Run tests (frontend)
+        if: matrix.service == 'frontend'
+        run: |
+          cd frontend
+          npm run test
+          npm run lint
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    strategy:
+      matrix:
+        service: [backend, frontend]
+        platform: [aws, gcp]
+    
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        if: matrix.platform == 'aws'
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        if: matrix.platform == 'aws'
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Set up Google Cloud SDK
+        if: matrix.platform == 'gcp'
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configure Docker for GCP
+        if: matrix.platform == 'gcp'
+        run: gcloud auth configure-docker
+
+      - name: Build and push (AWS)
+        if: matrix.platform == 'aws'
+        run: |
+          docker build -t $REGISTRY_AWS/${{ matrix.service }}:${{ github.sha }} \
+            -f Dockerfile.${{ matrix.service }} .
+          docker push $REGISTRY_AWS/${{ matrix.service }}:${{ github.sha }}
+
+      - name: Build and push (GCP)
+        if: matrix.platform == 'gcp'
+        run: |
+          docker build -t $REGISTRY_GCP/${{ matrix.service }}:${{ github.sha }} \
+            -f Dockerfile.${{ matrix.service }} .
+          docker push $REGISTRY_GCP/${{ matrix.service }}:${{ github.sha }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.app_url }}
+    
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy Infrastructure
+        id: deploy
+        run: |
+          cd terraform/aws
+          terraform init
+          terraform validate
+          terraform plan -out=tfplan
+          terraform apply -auto-approve tfplan
+
+      - name: Update ECS Services
+        run: |
+          aws ecs update-service --cluster community-connect \
+            --service backend-service --force-new-deployment
+          aws ecs update-service --cluster community-connect \
+            --service frontend-service --force-new-deployment
+
+      - name: Health Check
+        run: |
+          ./scripts/deploy.sh verify
+
+      - name: Notify Deployment Status
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

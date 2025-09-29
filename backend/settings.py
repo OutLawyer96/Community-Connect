@@ -93,26 +93,34 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '100/hour',
         'user': '1000/hour',
         'claim': '5/hour',
         'search_suggestions': '30/min',
+        'messaging': '20/hour',
+        'behavior_logging': '100/hour',
     }
 }
 
 # CORS settings for frontend integration
-CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000').split(',')
+# Allow common localhost dev ports by default; override via env var as needed
+CORS_ALLOWED_ORIGINS = config(
+    'CORS_ALLOWED_ORIGINS',
+    default='http://localhost:3000,http://localhost:3002,http://127.0.0.1:3000,http://127.0.0.1:3002'
+).split(',')
 
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = True  # Temporary for dev to fix CORS issues
 
 ROOT_URLCONF = 'backend.urls'
 
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -214,7 +222,7 @@ EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='no-reply@communityconnect.local')
 
 # Frontend URL for email links
-FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3002')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -245,3 +253,61 @@ else:
 
 # Cache timeout for search results
 SEARCH_CACHE_TIMEOUT = config('SEARCH_CACHE_TIMEOUT', default=300, cast=int)  # 5 minutes
+
+# Notification settings
+NOTIFICATION_EMAIL_FROM = config('NOTIFICATION_EMAIL_FROM', default=DEFAULT_FROM_EMAIL)
+NOTIFICATION_BATCH_SIZE = config('NOTIFICATION_BATCH_SIZE', default=100, cast=int)
+SITE_URL = config('SITE_URL', default=FRONTEND_URL)
+
+# Recommendation System Configuration
+RECOMMENDATION_CACHE_TIMEOUT = config('RECOMMENDATION_CACHE_TIMEOUT', default=3600, cast=int)  # 1 hour
+RECOMMENDATION_BATCH_SIZE = config('RECOMMENDATION_BATCH_SIZE', default=1000, cast=int)
+COLLABORATIVE_FILTERING_COMPONENTS = config('CF_COMPONENTS', default=50, cast=int)
+RECOMMENDATION_MODEL_DIR = config('RECOMMENDATION_MODEL_DIR', default='data/models')
+
+# Default algorithm weights for hybrid recommendations
+RECOMMENDATION_WEIGHTS = {
+    'collaborative': 0.5,
+    'content': 0.3,
+    'location': 0.2
+}
+
+# A/B Test Experiments Configuration
+AB_TEST_EXPERIMENTS = {
+    'recommendation_weights': {
+        'description': 'Test different algorithm weights for hybrid recommendations',
+        'variants': {
+            'control': {
+                'weight': 0.5,
+                'weights': {'collaborative': 0.5, 'content': 0.3, 'location': 0.2}
+            },
+            'cf_heavy': {
+                'weight': 0.25,
+                'weights': {'collaborative': 0.7, 'content': 0.2, 'location': 0.1}
+            },
+            'content_heavy': {
+                'weight': 0.25,
+                'weights': {'collaborative': 0.3, 'content': 0.5, 'location': 0.2}
+            }
+        },
+        'success_metrics': ['click_through_rate', 'conversion_rate', 'engagement_time']
+    },
+    'cold_start_strategy': {
+        'description': 'Test different approaches for new users',
+        'variants': {
+            'popular': {'weight': 0.4, 'strategy': 'popular_providers'},
+            'category_diverse': {'weight': 0.3, 'strategy': 'category_based'},
+            'location_popular': {'weight': 0.3, 'strategy': 'location_popular'}
+        },
+        'success_metrics': ['first_interaction_time', 'retention_rate', 'favorites_added']
+    },
+    'recommendation_count': {
+        'description': 'Test optimal number of recommendations to show',
+        'variants': {
+            'small': {'weight': 0.33, 'count': 5},
+            'medium': {'weight': 0.34, 'count': 10},
+            'large': {'weight': 0.33, 'count': 20}
+        },
+        'success_metrics': ['scroll_depth', 'click_through_rate', 'time_on_page']
+    }
+}

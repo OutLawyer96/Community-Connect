@@ -14,7 +14,7 @@ export function useAuth() {
 
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [token, setToken] = useState(localStorage.getItem('authToken'));
   const [loading, setLoading] = useState(true);
 
   // Check if user is logged in on app start
@@ -25,7 +25,10 @@ export function AuthProvider({ children }) {
         setCurrentUser(response.data.user);
       } catch (error) {
         console.error('Error fetching user data:', error);
-        logout();
+        // Only logout on 401 errors (unauthorized), not other errors
+        if (error.response?.status === 401) {
+          logout();
+        }
       } finally {
         setLoading(false);
       }
@@ -48,7 +51,7 @@ export function AuthProvider({ children }) {
       const { user, token: authToken } = response.data;
       setCurrentUser(user);
       setToken(authToken);
-      localStorage.setItem('token', authToken);
+      localStorage.setItem('authToken', authToken);
       
       return { success: true };
     } catch (error) {
@@ -66,7 +69,7 @@ export function AuthProvider({ children }) {
       const { user, token: authToken } = response.data;
       setCurrentUser(user);
       setToken(authToken);
-      localStorage.setItem('token', authToken);
+      localStorage.setItem('authToken', authToken);
       
       return { success: true };
     } catch (error) {
@@ -85,7 +88,60 @@ export function AuthProvider({ children }) {
     } finally {
       setCurrentUser(null);
       setToken(null);
-      localStorage.removeItem('token');
+      localStorage.removeItem('authToken');
+    }
+  };
+
+  const updateProfile = async (profileData) => {
+    try {
+      let response;
+      
+      // Check if profileData contains file uploads
+      if (profileData instanceof FormData) {
+        response = await apiClient.patch(
+          API_CONFIG.ENDPOINTS.PROFILE,
+          profileData,
+          {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          }
+        );
+      } else {
+        response = await apiClient.patch(
+          API_CONFIG.ENDPOINTS.PROFILE,
+          profileData
+        );
+      }
+      
+      // Update current user data
+      setCurrentUser(response.data);
+      
+      return { success: true, user: response.data };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error.response?.data?.message || 'Profile update failed',
+        errors: error.response?.data // Include field-specific errors
+      };
+    }
+  };
+
+  const refreshUser = async () => {
+    try {
+      const response = await apiClient.get(API_CONFIG.ENDPOINTS.DASHBOARD);
+      setCurrentUser(response.data.user);
+      return { success: true, user: response.data.user };
+    } catch (error) {
+      console.error('Error refreshing user data:', error);
+      // Only logout on 401 errors
+      if (error.response?.status === 401) {
+        logout();
+      }
+      return { 
+        success: false, 
+        error: error.response?.data?.message || 'Failed to refresh user data' 
+      };
     }
   };
 
@@ -95,6 +151,8 @@ export function AuthProvider({ children }) {
     login,
     register,
     logout,
+    updateProfile,
+    refreshUser,
     loading
   };
 

@@ -1,0 +1,216 @@
+.message-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  background-color: transparent;
+  min-height: 2.5rem;
+}
+
+.message-button:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* Size variations */
+.message-button--small {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  min-height: 2rem;
+}
+
+.message-button--large {
+  padding: 1rem 1.5rem;
+  font-size: 1.125rem;
+  min-height: 3rem;
+}
+
+/* Variant styles */
+.message-button--primary {
+  background-color: #2563eb;
+  color: white;
+}
+
+.message-button--primary:hover:not(.message-button--disabled) {
+  background-color: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.message-button--secondary {
+  background-color: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.message-button--secondary:hover:not(.message-button--disabled) {
+  background-color: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+.message-button--outline {
+  background-color: transparent;
+  color: #2563eb;
+  border: 2px solid #2563eb;
+}
+
+.message-button--outline:hover:not(.message-button--disabled) {
+  background-color: #2563eb;
+  color: white;
+}
+
+.message-button--ghost {
+  background-color: transparent;
+  color: #6b7280;
+  border: none;
+}
+
+.message-button--ghost:hover:not(.message-button--disabled) {
+  background-color: #f9fafb;
+  color: #374151;
+}
+
+/* Disabled state */
+.message-button--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Button content layout */
+.message-button__content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.message-button__icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.message-button__label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.message-button__provider-name {
+  font-weight: 600;
+}
+
+/* Spinner */
+.message-button__spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  .message-button--secondary {
+    background-color: #374151;
+    color: #f9fafb;
+    border-color: #4b5563;
+  }
+
+  .message-button--secondary:hover:not(.message-button--disabled) {
+    background-color: #4b5563;
+    border-color: #6b7280;
+  }
+
+  .message-button--ghost {
+    color: #9ca3af;
+  }
+
+  .message-button--ghost:hover:not(.message-button--disabled) {
+    background-color: #1f2937;
+    color: #f3f4f6;
+  }
+}
+
+/* Mobile responsive */
+@media (max-width: 640px) {
+  .message-button {
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+  }
+
+  .message-button--small {
+    padding: 0.375rem 0.625rem;
+    font-size: 0.75rem;
+  }
+
+  .message-button--large {
+    padding: 0.875rem 1.25rem;
+    font-size: 1rem;
+  }
+
+  .message-button__label {
+    display: none;
+  }
+
+  .message-button__content {
+    gap: 0;
+  }
+}
+
+/* Icon-only variation */
+.message-button--icon-only .message-button__label {
+  display: none;
+}
+
+.message-button--icon-only {
+  padding: 0.75rem;
+  min-width: 2.5rem;
+}
+
+.message-button--icon-only.message-button--small {
+  padding: 0.5rem;
+  min-width: 2rem;
+}
+
+.message-button--icon-only.message-button--large {
+  padding: 1rem;
+  min-width: 3rem;
+}
+
+/* Animation for new messages */
+.message-button--has-unread {
+  animation: gentle-pulse 3s ease-in-out infinite;
+}
+
+@keyframes gentle-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}

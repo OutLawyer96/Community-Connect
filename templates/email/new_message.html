@@ -1,0 +1,104 @@
+{% extends "email/base.html" %}
+
+{% block title %}New Message - Community Connect{% endblock %}
+
+{% block content %}
+<div style="text-align: center; margin: 20px 0;">
+    <div style="font-size: 48px; margin-bottom: 10px;">💬</div>
+    <h2 style="color: #3b82f6; margin: 0;">New Message</h2>
+</div>
+
+<div class="message-content">
+    <p>You have received a new message on Community Connect.</p>
+</div>
+
+{% if sender_name %}
+<div class="highlight-box">
+    <h3 style="margin-top: 0; color: #1f2937;">📨 Message from {{ sender_name }}</h3>
+    
+    {% if message_preview %}
+    <div style="background-color: #ffffff; padding: 20px; border-radius: 6px; border-left: 4px solid #3b82f6; margin: 15px 0;">
+        <div style="font-style: italic; color: #4b5563; font-size: 16px; line-height: 1.5;">
+            "{{ message_preview }}"
+        </div>
+        {% if message_preview|length >= 150 %}
+        <div style="margin-top: 10px; font-size: 14px; color: #6b7280;">
+            <em>Click below to read the full message...</em>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+    
+    <div style="margin: 15px 0;">
+        <strong>Received:</strong> {{ notification.created_at|date:"F j, Y g:i A" }}
+    </div>
+</div>
+{% endif %}
+
+<div class="content-block">
+    <h4 style="margin-top: 0; color: #1f2937;">💬 About Messaging on Community Connect</h4>
+    <ul style="margin: 0; padding-left: 20px; color: #4b5563;">
+        <li><strong>Direct Communication:</strong> Connect directly with customers or providers</li>
+        <li><strong>Secure Platform:</strong> All messages are private and secure</li>
+        <li><strong>Business Opportunities:</strong> Discuss services, pricing, and scheduling</li>
+        <li><strong>Build Relationships:</strong> Foster trust and long-term customer relationships</li>
+    </ul>
+</div>
+
+{% if user.role == 'provider' %}
+<div style="background-color: #ecfdf5; border: 1px solid #10b981; border-radius: 6px; padding: 20px; margin: 20px 0;">
+    <h4 style="color: #065f46; margin-top: 0;">🌟 Provider Tip</h4>
+    <p style="color: #047857; margin: 0;">
+        Quick responses to customer messages help build trust and can lead to more bookings. 
+        Try to respond within a few hours when possible!
+    </p>
+</div>
+{% endif %}
+
+{% if user.role == 'customer' %}
+<div style="background-color: #eff6ff; border: 1px solid #3b82f6; border-radius: 6px; padding: 20px; margin: 20px 0;">
+    <h4 style="color: #1e40af; margin-top: 0;">💡 Customer Tip</h4>
+    <p style="color: #1d4ed8; margin: 0;">
+        When messaging providers, be specific about your needs, timeline, and location. 
+        This helps them provide you with the best possible service!
+    </p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block call_to_action %}
+<div style="text-align: center; margin: 30px 0;">
+    {% if messages_url %}
+    <a href="{{ messages_url }}" class="btn-primary">View & Reply to Message</a>
+    {% endif %}
+    
+    <a href="{{ site_url }}/dashboard" class="btn-secondary">Go to Dashboard</a>
+</div>
+
+<div style="margin: 30px 0; text-align: center;">
+    <h4 style="color: #1f2937;">Message Tips</h4>
+    <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; margin: 20px 0;">
+        <div style="flex: 1; min-width: 200px; text-align: center;">
+            <div style="font-size: 24px; margin-bottom: 5px;">⚡</div>
+            <strong style="color: #1f2937;">Respond Quickly</strong>
+            <p style="font-size: 14px; color: #6b7280; margin: 5px 0;">Fast responses show professionalism</p>
+        </div>
+        <div style="flex: 1; min-width: 200px; text-align: center;">
+            <div style="font-size: 24px; margin-bottom: 5px;">🤝</div>
+            <strong style="color: #1f2937;">Be Professional</strong>
+            <p style="font-size: 14px; color: #6b7280; margin: 5px 0;">Maintain a friendly, helpful tone</p>
+        </div>
+        <div style="flex: 1; min-width: 200px; text-align: center;">
+            <div style="font-size: 24px; margin-bottom: 5px;">📋</div>
+            <strong style="color: #1f2937;">Be Specific</strong>
+            <p style="font-size: 14px; color: #6b7280; margin: 5px 0;">Include relevant details and questions</p>
+        </div>
+    </div>
+</div>
+
+<div style="background-color: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 15px; margin: 20px 0; text-align: center;">
+    <p style="margin: 0; color: #92400e; font-weight: 500;">
+        <strong>🔔 Message Notifications:</strong> You can manage your message notification preferences in your account settings.
+    </p>
+</div>
+{% endblock %}

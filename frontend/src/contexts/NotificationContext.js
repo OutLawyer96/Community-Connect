@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 import { getMyClaims } from '../services/claimsService';
+import notificationService from '../services/notificationService';
 
 /**
  * NotificationContext
@@ -28,9 +29,17 @@ export const NotificationProvider = ({ children }) => {
         enableClaimPolling: true,
         pollIntervalMs: 30000,
         stickyImportant: true,
+        enableServerNotifications: true,
+        serverPollIntervalMs: 15000,
       };
     } catch {
-      return { enableClaimPolling: true, pollIntervalMs: 30000, stickyImportant: true };
+      return { 
+        enableClaimPolling: true, 
+        pollIntervalMs: 30000, 
+        stickyImportant: true,
+        enableServerNotifications: true,
+        serverPollIntervalMs: 15000,
+      };
     }
   });
   const [history, setHistory] = useState(() => {
@@ -40,9 +49,13 @@ export const NotificationProvider = ({ children }) => {
       return [];
     }
   });
+  const [serverNotifications, setServerNotifications] = useState([]);
+  const [unreadServerCount, setUnreadServerCount] = useState(0);
   const lastClaimStatusesRef = useRef({});
   const pollingRef = useRef(null);
+  const serverPollingRef = useRef(null);
   const abortRef = useRef(null);
+  const serverAbortRef = useRef(null);
 
   const addNotification = useCallback((notification) => {
     const id = Date.now() + Math.random();
@@ -80,27 +93,130 @@ export const NotificationProvider = ({ children }) => {
     setNotifications([]);
   };
 
+  // Server notification polling
+  const pollServerNotifications = useCallback(async () => {
+    if (!preferences.enableServerNotifications) return;
+    
+    try {
+      serverAbortRef.current?.abort();
+      const controller = new AbortController();
+      serverAbortRef.current = controller;
+      
+      const [notificationsResult, statsResult] = await Promise.all([
+        notificationService.getNotifications({ page_size: 20, is_read: false }),
+        notificationService.getNotificationStats()
+      ]);
+      
+      if (notificationsResult.success) {
+        setServerNotifications(notificationsResult.data.results || []);
+      }
+      
+      if (statsResult.success) {
+        setUnreadServerCount(statsResult.data.total_unread || 0);
+      }
+    } catch (error) {
+      if (error?.name === 'AbortError') return;
+      console.error('Error polling server notifications:', error);
+    }
+  }, [preferences.enableServerNotifications]);
+
   // Preferences persistence
   useEffect(() => {
     localStorage.setItem('cc_notification_prefs', JSON.stringify(preferences));
   }, [preferences]);
 
-  // Unread helpers
-  const unreadCount = useMemo(() => (history || []).filter(h => !h.read).length, [history]);
-  const markAsRead = useCallback((id) => {
-    setHistory(prev => {
-      const next = prev.map(h => (h.id === id ? { ...h, read: true } : h));
-      localStorage.setItem('cc_notification_history', JSON.stringify(next));
-      return next;
-    });
-  }, []);
-  const markAllAsRead = useCallback(() => {
+  // Server notification polling setup
+  useEffect(() => {
+    const hasToken = !!localStorage.getItem('token');
+    if (!hasToken || !preferences.enableServerNotifications) return;
+
+    // Initial load
+    pollServerNotifications();
+    
+    // Set up polling
+    serverPollingRef.current = setInterval(pollServerNotifications, preferences.serverPollIntervalMs);
+    
+    return () => {
+      clearInterval(serverPollingRef.current);
+      serverAbortRef.current?.abort();
+    };
+  }, [preferences.enableServerNotifications, preferences.serverPollIntervalMs, pollServerNotifications]);
+
+  // Unread helpers - combine local and server counts
+  const unreadCount = useMemo(() => {
+    const localUnread = (history || []).filter(h => !h.read).length;
+    return localUnread + unreadServerCount;
+  }, [history, unreadServerCount]);
+
+  const markAsRead = useCallback(async (id) => {
+    // Check if it's a server notification
+    const serverNotification = serverNotifications.find(n => n.id === id);
+    if (serverNotification) {
+      try {
+        const result = await notificationService.markAsRead([id]);
+        if (result.success) {
+          setServerNotifications(prev => 
+            prev.map(n => n.id === id ? { ...n, is_read: true } : n)
+          );
+          setUnreadServerCount(prev => Math.max(0, prev - 1));
+        }
+      } catch (error) {
+        console.error('Error marking server notification as read:', error);
+      }
+    } else {
+      // Handle local notification
+      setHistory(prev => {
+        const next = prev.map(h => (h.id === id ? { ...h, read: true } : h));
+        localStorage.setItem('cc_notification_history', JSON.stringify(next));
+        return next;
+      });
+    }
+  }, [serverNotifications]);
+
+  const markAllAsRead = useCallback(async () => {
+    // Mark all server notifications as read
+    try {
+      const result = await notificationService.markAllAsRead();
+      if (result.success) {
+        setServerNotifications(prev => 
+          prev.map(n => ({ ...n, is_read: true }))
+        );
+        setUnreadServerCount(0);
+      }
+    } catch (error) {
+      console.error('Error marking all server notifications as read:', error);
+    }
+
+    // Mark all local notifications as read
     setHistory(prev => {
       const next = prev.map(h => (h.read ? h : { ...h, read: true }));
       localStorage.setItem('cc_notification_history', JSON.stringify(next));
       return next;
     });
   }, []);
+
+  // Combined history - merge local and server notifications
+  const combinedHistory = useMemo(() => {
+    const serverHistory = serverNotifications.map(n => ({
+      id: n.id,
+      title: n.title,
+      message: n.message,
+      type: n.notification_type,
+      createdAt: new Date(n.created_at).getTime(),
+      read: n.is_read,
+      isServer: true,
+      relatedUrl: n.related_object_url
+    }));
+    
+    const localHistory = history.map(h => ({
+      ...h,
+      isServer: false
+    }));
+    
+    return [...serverHistory, ...localHistory]
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, 100);
+  }, [serverNotifications, history]);
 
   // Lightweight polling for claim status changes
   useEffect(() => {
@@ -190,11 +306,14 @@ export const NotificationProvider = ({ children }) => {
     clearAllNotifications,
     preferences,
     setPreferences,
-    history,
+    history: combinedHistory,
     setHistory,
     unreadCount,
     markAsRead,
     markAllAsRead,
+    serverNotifications,
+    unreadServerCount,
+    pollServerNotifications,
     // Claim-specific helpers
     notifyClaimSubmitted,
     notifyClaimApproved,

@@ -3,6 +3,10 @@ from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db.models import Avg
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
+from django.utils import timezone
+from datetime import timedelta
 
 # Conditional imports for PostgreSQL and GIS features
 try:
@@ -38,10 +42,10 @@ class User(AbstractUser):
         return f"{self.username} ({self.get_role_display()})"
     
     def get_avatar_url(self):
-        """Return the full URL for the avatar image or a default placeholder URL"""
+        """Return the full URL for the avatar image or None if no avatar uploaded"""
         if self.avatar:
             return self.avatar.url
-        return '/static/images/default-avatar.png'
+        return None
 
 class Category(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -272,6 +276,13 @@ class Availability(models.Model):
         return f"{self.provider.business_name} - {self.get_day_of_week_display()}: {self.start_time}-{self.end_time}"
 
 class Review(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending Review'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('flagged', 'Flagged for Review')
+    ]
+    
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='reviews')
     provider = models.ForeignKey(Provider, on_delete=models.CASCADE, related_name='reviews')
     # Enables community ratings and reviews
@@ -281,15 +292,136 @@ class Review(models.Model):
     comment = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    # Moderation fields
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    moderation_notes = models.TextField(blank=True, null=True)
+    moderated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='moderated_reviews'
+    )
+    moderated_at = models.DateTimeField(null=True, blank=True)
+    reported_count = models.PositiveIntegerField(default=0)
     is_verified = models.BooleanField(default=False)  # For verified purchases/services
+    
+    # Optional purchase verification fields
+    purchase_verified = models.BooleanField(default=False)
+    purchase_verification = models.ForeignKey(
+        'PurchaseVerification',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviews'
+    )
 
     class Meta:
         # Ensures a user can only review a provider once
         unique_together = ('user', 'provider')
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status']),
+            models.Index(fields=['reported_count']),
+            models.Index(fields=['purchase_verified']),
+        ]
 
     def __str__(self):
         return f"Review by {self.user.username} for {self.provider.business_name}"
+
+    def report(self):
+        """Increment the reported_count and set status to flagged if threshold reached"""
+        self.reported_count += 1
+        if self.reported_count >= 3 and self.status == 'approved':
+            self.status = 'flagged'
+            self.save()
+        return self.reported_count
+
+
+class ReviewReport(models.Model):
+    """Model for storing user reports about reviews"""
+    REASON_CHOICES = [
+        ('spam', 'Spam or Advertising'),
+        ('offensive', 'Offensive Content'),
+        ('irrelevant', 'Irrelevant Content'),
+        ('fake', 'Suspected Fake Review'),
+        ('conflict', 'Conflict of Interest'),
+        ('other', 'Other')
+    ]
+    
+    review = models.ForeignKey(Review, on_delete=models.CASCADE, related_name='reports')
+    reporter = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='review_reports'
+    )
+    reason = models.CharField(max_length=20, choices=REASON_CHOICES)
+    details = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved = models.BooleanField(default=False)
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='resolved_reports'
+    )
+    resolution_notes = models.TextField(blank=True, null=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('review', 'reporter')  # Prevent duplicate reports
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['resolved']),
+            models.Index(fields=['reason']),
+        ]
+
+    def __str__(self):
+        return f"Report on review {self.review.id} by {self.reporter.username}"
+
+    def resolve(self, resolved_by, notes=None):
+        """Mark the report as resolved"""
+        self.resolved = True
+        self.resolved_by = resolved_by
+        self.resolution_notes = notes
+        self.resolved_at = timezone.now()
+        self.save()
+
+
+class PurchaseVerification(models.Model):
+    """Model for verifying that a review is from a legitimate customer"""
+    provider = models.ForeignKey(Provider, on_delete=models.CASCADE, related_name='purchase_verifications')
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='purchase_verifications'
+    )
+    transaction_date = models.DateTimeField()
+    transaction_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    verification_method = models.CharField(max_length=50)  # e.g., 'receipt', 'booking_system', 'manual'
+    verification_details = models.JSONField(null=True, blank=True)  # Store method-specific details
+    verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='verified_purchases'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_valid = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['-transaction_date']
+        indexes = [
+            models.Index(fields=['provider', 'customer', '-transaction_date']),
+            models.Index(fields=['is_valid']),
+        ]
+
+    def __str__(self):
+        return f"Purchase by {self.customer.username} from {self.provider.business_name}"
 
 class Favorite(models.Model):
     """Allows users to save favorite providers"""
@@ -303,7 +435,242 @@ class Favorite(models.Model):
     def __str__(self):
         return f"{self.user.username} favorites {self.provider.business_name}"
 
+
+class UserBehavior(models.Model):
+    ACTION_CHOICES = [
+        ('view', 'View Provider'),
+        ('search', 'Search Providers'),
+        ('favorite', 'Add to Favorites'),
+        ('contact', 'Contact Provider'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    action_type = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    provider = models.ForeignKey('Provider', on_delete=models.CASCADE, null=True, blank=True)
+    search_query = models.TextField(null=True, blank=True)
+    category = models.ForeignKey('Category', on_delete=models.SET_NULL, null=True, blank=True)
+    location_lat = models.DecimalField(max_digits=10, decimal_places=8, null=True, blank=True)
+    location_lng = models.DecimalField(max_digits=11, decimal_places=8, null=True, blank=True)
+    session_id = models.CharField(max_length=40, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'api_userbehavior'
+        indexes = [
+            models.Index(fields=['user', 'action_type']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['provider']),
+            models.Index(fields=['session_id']),
+        ]
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.user or 'Anonymous'} - {self.action_type} - {self.created_at}"
+
+
+class UserRecommendation(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    provider = models.ForeignKey('Provider', on_delete=models.CASCADE)
+    score = models.FloatField()
+    algorithm_version = models.CharField(max_length=50, default='v1.0')
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    
+    class Meta:
+        db_table = 'api_userrecommendation'
+        unique_together = ['user', 'provider']
+        indexes = [
+            models.Index(fields=['user', '-score']),
+            models.Index(fields=['expires_at']),
+            models.Index(fields=['algorithm_version']),
+        ]
+        ordering = ['-score']
+    
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            self.expires_at = timezone.now() + timedelta(hours=24)
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"{self.user.username} -> {self.provider.business_name} ({self.score:.2f})"
+
+
+class ABTestVariant(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    experiment_name = models.CharField(max_length=100)
+    variant = models.CharField(max_length=50)
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'api_abtestvariant'
+        unique_together = ['user', 'experiment_name']
+        indexes = [
+            models.Index(fields=['user', 'experiment_name']),
+            models.Index(fields=['experiment_name', 'variant']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.experiment_name}: {self.variant}"
+
+
+class Notification(models.Model):
+    NOTIFICATION_TYPES = (
+        ('review', 'Review'),
+        ('claim', 'Claim'),
+        ('message', 'Message'),
+        ('system', 'System'),
+    )
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    notification_type = models.CharField(max_length=20, choices=NOTIFICATION_TYPES)
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    is_read = models.BooleanField(default=False)
+    email_sent = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    # Generic foreign key for linking to any model instance
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE, null=True, blank=True)
+    object_id = models.PositiveIntegerField(null=True, blank=True)
+    content_object = GenericForeignKey('content_type', 'object_id')
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'notification_type']),
+            models.Index(fields=['user', 'is_read']),
+            models.Index(fields=['created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.get_notification_type_display()}: {self.title}"
+
+
+class NotificationPreference(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='notification_preferences')
+    email_for_reviews = models.BooleanField(default=True)
+    email_for_claims = models.BooleanField(default=True)
+    email_for_messages = models.BooleanField(default=True)
+    email_for_system = models.BooleanField(default=True)
+    in_app_enabled = models.BooleanField(default=True)
+    
+    def __str__(self):
+        return f"{self.user.username}'s notification preferences"
+
+
+class MessageThread(models.Model):
+    customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='customer_threads', limit_choices_to={'role': 'customer'})
+    provider = models.ForeignKey(User, on_delete=models.CASCADE, related_name='provider_threads', limit_choices_to={'role': 'provider'})
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('customer', 'provider')
+        ordering = ['-updated_at']
+    
+    def __str__(self):
+        return f"Thread between {self.customer.username} and {self.provider.username}"
+    
+    def get_other_participant(self, user):
+        """Get the other participant in the thread"""
+        return self.provider if user == self.customer else self.customer
+
+
+class Message(models.Model):
+    thread = models.ForeignKey(MessageThread, on_delete=models.CASCADE, related_name='messages')
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_messages')
+    content = models.TextField()
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['thread', 'created_at']),
+            models.Index(fields=['sender', 'created_at']),
+        ]
+    
+    def __str__(self):
+        return f"Message from {self.sender.username} in thread {self.thread.id}"
+
 # Note: GIS fields disabled for Windows development environment
 # In production with PostGIS, uncomment the following:
 # if HAS_GIS:
 #     Address.add_to_class('location', gis_models.PointField(srid=4326, null=True, blank=True))
+
+
+class UserBehavior(models.Model):
+    ACTION_CHOICES = [
+        ('view', 'View Provider'),
+        ('search', 'Search Providers'),
+        ('favorite', 'Add to Favorites'),
+        ('contact', 'Contact Provider'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    action_type = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    provider = models.ForeignKey('Provider', on_delete=models.CASCADE, null=True, blank=True)
+    search_query = models.TextField(null=True, blank=True)
+    category = models.ForeignKey('Category', on_delete=models.SET_NULL, null=True, blank=True)
+    location_lat = models.DecimalField(max_digits=10, decimal_places=8, null=True, blank=True)
+    location_lng = models.DecimalField(max_digits=11, decimal_places=8, null=True, blank=True)
+    session_id = models.CharField(max_length=40, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'api_userbehavior'
+        indexes = [
+            models.Index(fields=['user', 'action_type']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['provider']),
+            models.Index(fields=['session_id']),
+        ]
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.user or 'Anonymous'} - {self.action_type} - {self.created_at}"
+
+
+class UserRecommendation(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    provider = models.ForeignKey('Provider', on_delete=models.CASCADE)
+    score = models.FloatField()
+    algorithm_version = models.CharField(max_length=50, default='v1.0')
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    
+    class Meta:
+        db_table = 'api_userrecommendation'
+        unique_together = ['user', 'provider']
+        indexes = [
+            models.Index(fields=['user', '-score']),
+            models.Index(fields=['expires_at']),
+            models.Index(fields=['algorithm_version']),
+        ]
+        ordering = ['-score']
+    
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            self.expires_at = timezone.now() + timedelta(hours=24)
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"{self.user.username} -> {self.provider.business_name} ({self.score:.2f})"
+
+
+class ABTestVariant(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    experiment_name = models.CharField(max_length=100)
+    variant = models.CharField(max_length=50)
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'api_abtestvariant'
+        unique_together = ['user', 'experiment_name']
+        indexes = [
+            models.Index(fields=['user', 'experiment_name']),
+            models.Index(fields=['experiment_name', 'variant']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.experiment_name}: {self.variant}"
