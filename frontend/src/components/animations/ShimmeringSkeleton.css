@@ -1,0 +1,45 @@
+/* ShimmeringSkeleton Styles */
+
+.shimmer-skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: #e5e7eb; /* gray-200 */
+}
+
+.shimmer-wave {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.6) 50%,
+    transparent 100%
+  );
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* Dark mode support */
+.dark .shimmer-skeleton {
+  background-color: #374151; /* gray-700 */
+}
+
+.dark .shimmer-wave {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 100%
+  );
+}

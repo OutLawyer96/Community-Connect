@@ -101,8 +101,10 @@ const Navigation = ({ links, className = "" }) => {
             className="md:hidden p-2 rounded-lg hover:bg-gray-100"
             onClick={() => setIsOpen(!isOpen)}
             whileTap={{ scale: 0.95 }}
+            aria-expanded={isOpen}
+            aria-label={isOpen ? "Close menu" : "Open menu"}
           >
-            <span className="sr-only">Open menu</span>
+            <span className="sr-only">{isOpen ? "Close menu" : "Open menu"}</span>
             <svg
               className="h-6 w-6"
               fill="none"
