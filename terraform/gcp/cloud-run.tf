@@ -1,6 +1,34 @@
+locals {
+  service_name_prefix = "community-connect"
+  common_annotations = {
+    "autoscaling.knative.dev/maxScale" = "10"
+    "autoscaling.knative.dev/minScale" = "1"
+  }
+  
+  # Backend settings
+  backend = {
+    name           = "${local.service_name_prefix}-backend"
+    container_port = 8000
+    health_path    = "/health/"
+  }
+  
+  # Frontend settings
+  frontend = {
+    name           = "${local.service_name_prefix}-frontend"
+    container_port = 80
+    health_path    = "/health"
+  }
+  
+  # Common service settings
+  service_settings = {
+    container_concurrency = 80
+    timeout_seconds      = 300
+  }
+}
+
 # Cloud Run Backend Service
 resource "google_cloud_run_service" "backend" {
-  name     = "community-connect-backend"
+  name     = local.backend.name
   location = var.region
 
   template {
@@ -54,12 +82,12 @@ resource "google_cloud_run_service" "backend" {
 
         ports {
           name           = "http1"
-          container_port = 8000
+          container_port = local.backend.container_port
         }
 
         startup_probe {
           http_get {
-            path = "/health/"
+            path = local.backend.health_path
           }
           initial_delay_seconds = 10
           timeout_seconds      = 3
@@ -69,7 +97,7 @@ resource "google_cloud_run_service" "backend" {
 
         liveness_probe {
           http_get {
-            path = "/health/"
+            path = local.backend.health_path
           }
           initial_delay_seconds = 60
           timeout_seconds      = 3
@@ -77,17 +105,15 @@ resource "google_cloud_run_service" "backend" {
         }
       }
 
-      container_concurrency = 80
-      timeout_seconds      = 300
+      container_concurrency = local.service_settings.container_concurrency
+      timeout_seconds      = local.service_settings.timeout_seconds
     }
 
     metadata {
-      annotations = {
-        "autoscaling.knative.dev/maxScale" = "10"
-        "autoscaling.knative.dev/minScale" = "1"
+      annotations = merge(local.common_annotations, {
         "run.googleapis.com/vpc-access-connector" = google_vpc_access_connector.connector.id
         "run.googleapis.com/cloudsql-instances"  = google_sql_database_instance.postgres.connection_name
-      }
+      })
     }
   }
 
@@ -106,7 +132,7 @@ resource "google_cloud_run_service" "backend" {
 
 # Cloud Run Frontend Service
 resource "google_cloud_run_service" "frontend" {
-  name     = "community-connect-frontend"
+  name     = local.frontend.name
   location = var.region
 
   template {
@@ -130,12 +156,12 @@ resource "google_cloud_run_service" "frontend" {
 
         ports {
           name           = "http1"
-          container_port = 80
+          container_port = local.frontend.container_port
         }
 
         startup_probe {
           http_get {
-            path = "/health"
+            path = local.frontend.health_path
           }
           initial_delay_seconds = 5
           timeout_seconds      = 3
@@ -145,7 +171,7 @@ resource "google_cloud_run_service" "frontend" {
 
         liveness_probe {
           http_get {
-            path = "/health"
+            path = local.frontend.health_path
           }
           initial_delay_seconds = 30
           timeout_seconds      = 3
@@ -153,15 +179,12 @@ resource "google_cloud_run_service" "frontend" {
         }
       }
 
-      container_concurrency = 80
-      timeout_seconds      = 300
+      container_concurrency = local.service_settings.container_concurrency
+      timeout_seconds      = local.service_settings.timeout_seconds
     }
 
     metadata {
-      annotations = {
-        "autoscaling.knative.dev/maxScale" = "10"
-        "autoscaling.knative.dev/minScale" = "1"
-      }
+      annotations = local.common_annotations
     }
   }
 
@@ -175,7 +198,7 @@ resource "google_cloud_run_service" "frontend" {
 
 # VPC Access Connector
 resource "google_vpc_access_connector" "connector" {
-  name          = "community-connect-vpc-connector"
+  name          = "${local.service_name_prefix}-vpc-connector"
   ip_cidr_range = var.vpc_connector_cidr
   network       = google_compute_network.main.name
   region        = var.region
@@ -187,11 +210,11 @@ resource "google_vpc_access_connector" "connector" {
 
 # Cloud Run NEG Backend Service
 resource "google_compute_backend_service" "backend" {
-  name = "community-connect-backend"
+  name = local.backend.name
 
   protocol    = "HTTP"
   port_name   = "http1"
-  timeout_sec = 300
+  timeout_sec = local.service_settings.timeout_seconds
 
   backend {
     group = google_compute_region_network_endpoint_group.backend.id
@@ -205,7 +228,7 @@ resource "google_compute_backend_service" "backend" {
 }
 
 resource "google_compute_region_network_endpoint_group" "backend" {
-  name                  = "community-connect-backend-neg"
+  name                  = "${local.backend.name}-neg"
   network_endpoint_type = "SERVERLESS"
   region                = var.region
   cloud_run {
@@ -215,11 +238,11 @@ resource "google_compute_region_network_endpoint_group" "backend" {
 
 # Frontend NEG Backend Service
 resource "google_compute_backend_service" "frontend" {
-  name = "community-connect-frontend"
+  name = local.frontend.name
 
   protocol    = "HTTP"
   port_name   = "http1"
-  timeout_sec = 300
+  timeout_sec = local.service_settings.timeout_seconds
 
   backend {
     group = google_compute_region_network_endpoint_group.frontend.id
@@ -233,7 +256,7 @@ resource "google_compute_backend_service" "frontend" {
 }
 
 resource "google_compute_region_network_endpoint_group" "frontend" {
-  name                  = "community-connect-frontend-neg"
+  name                  = "${local.frontend.name}-neg"
   network_endpoint_type = "SERVERLESS"
   region                = var.region
   cloud_run {
@@ -243,19 +266,19 @@ resource "google_compute_region_network_endpoint_group" "frontend" {
 
 # Health Checks
 resource "google_compute_health_check" "backend" {
-  name = "community-connect-backend-health"
+  name = "${local.backend.name}-health"
 
   http_health_check {
-    port = 8000
-    request_path = "/health/"
+    port         = local.backend.container_port
+    request_path = local.backend.health_path
   }
 }
 
 resource "google_compute_health_check" "frontend" {
-  name = "community-connect-frontend-health"
+  name = "${local.frontend.name}-health"
 
   http_health_check {
-    port = 80
-    request_path = "/health"
+    port         = local.frontend.container_port
+    request_path = local.frontend.health_path
   }
 }

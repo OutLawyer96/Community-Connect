@@ -2,6 +2,7 @@ from django.db import models
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.exceptions import ValidationError
 from django.db.models import Avg
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
@@ -191,11 +192,44 @@ class Claim(models.Model):
 
 
 class Service(models.Model):
-    provider = models.ForeignKey(Provider, on_delete=models.CASCADE, related_name='services')
-    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='services')
-    name = models.CharField(max_length=150)
-    description = models.TextField(blank=True, null=True)
-    price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    """
+    Represents a specific service or offering provided by a provider.
+    
+    Examples: "Plumbing Repair", "Electrical Installation", "Lawn Mowing"
+    This is NOT the provider's schedule/availability - see Availability model for that.
+    
+    Each service has a category, pricing information, and description.
+    A provider can offer multiple services (e.g., a handyman might offer both
+    plumbing and electrical services).
+    """
+    provider = models.ForeignKey(
+        Provider, 
+        on_delete=models.CASCADE, 
+        related_name='services',
+        help_text='The provider offering this service'
+    )
+    category = models.ForeignKey(
+        Category, 
+        on_delete=models.CASCADE, 
+        related_name='services',
+        help_text='Category this service belongs to (e.g., Plumbing, Electrical)'
+    )
+    name = models.CharField(
+        max_length=150,
+        help_text='Service name (e.g., "Emergency Plumbing Repair")'
+    )
+    description = models.TextField(
+        blank=True, 
+        null=True,
+        help_text='Detailed description of what this service includes'
+    )
+    price = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        help_text='Service price (interpretation depends on price_type)'
+    )
     price_type = models.CharField(
         max_length=20, 
         choices=[
@@ -204,9 +238,13 @@ class Service(models.Model):
             ('daily', 'Per Day'),
             ('quote', 'Quote Required')
         ],
-        default='quote'
+        default='quote',
+        help_text='How the price is charged (fixed, hourly, daily, or requires quote)'
     )
-    is_active = models.BooleanField(default=True)
+    is_active = models.BooleanField(
+        default=True,
+        help_text='Whether this service is currently being offered'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
@@ -251,7 +289,18 @@ class Address(models.Model):
         verbose_name_plural = "Addresses"
 
 class Availability(models.Model):
-    """Provider availability and operating hours"""
+    """
+    Represents a provider's weekly schedule and operating hours.
+    
+    This model defines WHEN a provider is available for work (e.g., "Monday 9am-5pm").
+    This is NOT the services they offer - see Service model for that.
+    
+    Each provider can have multiple availability entries (one per day of the week,
+    or multiple time slots per day). Used to show customers when a provider can
+    be booked for appointments.
+    
+    Example: A plumber might be available Monday-Friday 8am-6pm, but not weekends.
+    """
     DAY_CHOICES = [
         ('monday', 'Monday'),
         ('tuesday', 'Tuesday'),
@@ -262,15 +311,46 @@ class Availability(models.Model):
         ('sunday', 'Sunday'),
     ]
     
-    provider = models.ForeignKey(Provider, on_delete=models.CASCADE, related_name='availability')
-    day_of_week = models.CharField(max_length=10, choices=DAY_CHOICES)
-    start_time = models.TimeField()
-    end_time = models.TimeField()
-    is_available = models.BooleanField(default=True)
+    provider = models.ForeignKey(
+        Provider, 
+        on_delete=models.CASCADE, 
+        related_name='availability',
+        help_text='The provider whose schedule this represents'
+    )
+    day_of_week = models.CharField(
+        max_length=10, 
+        choices=DAY_CHOICES,
+        help_text='Day of the week for this availability slot'
+    )
+    start_time = models.TimeField(
+        help_text='Time when provider becomes available (must be before end_time)'
+    )
+    end_time = models.TimeField(
+        help_text='Time when provider stops being available (must be after start_time)'
+    )
+    is_available = models.BooleanField(
+        default=True,
+        help_text='Whether the provider is actually available during this time slot'
+    )
     
     class Meta:
         unique_together = ('provider', 'day_of_week')
         ordering = ['day_of_week', 'start_time']
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(start_time__lt=models.F('end_time')),
+                name='availability_start_before_end',
+            ),
+        ]
+    
+    def clean(self):
+        """Validate that start_time is before end_time"""
+        super().clean()
+        if self.start_time and self.end_time and self.start_time >= self.end_time:
+            raise ValidationError({
+                'end_time': 'End time must be after start time.',
+                'start_time': 'Start time must be before end time.',
+            })
     
     def __str__(self):
         return f"{self.provider.business_name} - {self.get_day_of_week_display()}: {self.start_time}-{self.end_time}"

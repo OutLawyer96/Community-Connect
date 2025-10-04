@@ -49,11 +49,11 @@ resource "aws_secretsmanager_secret" "db_url" {
 resource "aws_secretsmanager_secret_version" "db_url" {
   secret_id = aws_secretsmanager_secret.db_url.id
   secret_string = jsonencode({
-    host     = aws_rds_cluster.main.endpoint
-    port     = aws_rds_cluster.main.port
-    database = aws_rds_cluster.main.database_name
-    username = aws_rds_cluster.main.master_username
-    password = aws_rds_cluster.main.master_password
+    host     = aws_db_instance.postgres.address
+    port     = aws_db_instance.postgres.port
+    database = aws_db_instance.postgres.db_name
+    username = aws_db_instance.postgres.username
+    password = aws_db_instance.postgres.password
   })
 }
 
@@ -80,7 +80,7 @@ resource "aws_secretsmanager_secret_version" "redis_url" {
 
 # IAM role for ECS tasks to access secrets
 resource "aws_iam_role_policy_attachment" "task_secrets" {
-  role       = aws_iam_role.ecs_task.name
+  role       = aws_iam_role.ecs_task_execution_role.name
   policy_arn = aws_iam_policy.secrets_access.arn
 }
 

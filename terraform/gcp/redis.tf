@@ -34,32 +34,14 @@ resource "google_vpc_access_connector" "redis" {
   region        = var.region
 }
 
-# Update Cloud Run service with VPC connector
-resource "google_cloud_run_service" "backend" {
-  # ... existing configuration ...
-
-  template {
-    spec {
-      containers {
-        # ... existing container configuration ...
-
-        env {
-          name  = "REDIS_HOST"
-          value = google_redis_instance.cache.host
-        }
-        env {
-          name  = "REDIS_PORT"
-          value = google_redis_instance.cache.port
-        }
-      }
-    }
-
-    metadata {
-      annotations = {
-        "run.googleapis.com/vpc-access-connector" = google_vpc_access_connector.redis.name
-        "run.googleapis.com/vpc-access-egress"    = "private-ranges-only"
-      }
-    }
+locals {
+  redis_connection = {
+    host = google_redis_instance.cache.host
+    port = google_redis_instance.cache.port
+  }
+  vpc_connector_annotations = {
+    "run.googleapis.com/vpc-access-connector" = google_vpc_access_connector.redis.name
+    "run.googleapis.com/vpc-access-egress"    = "private-ranges-only"
   }
 }
 

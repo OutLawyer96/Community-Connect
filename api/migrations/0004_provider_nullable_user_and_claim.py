@@ -8,19 +8,11 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('api', '0003_claim'),
+        ('api', '0001_initial'),
     ]
 
     operations = [
-        # Step 1: Add new id field as primary key
-        migrations.AddField(
-            model_name='provider',
-            name='id',
-            field=models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID'),
-            preserve_default=False,
-        ),
-        
-        # Step 2: Remove primary key from user field and make it nullable
+        # Step 1: Make user field nullable and remove primary_key=True
         migrations.AlterField(
             model_name='provider',
             name='user',
@@ -34,7 +26,7 @@ class Migration(migrations.Migration):
             ),
         ),
         
-        # Step 3: Change is_claimed default to False
+        # Step 2: Change is_claimed default to False
         migrations.AlterField(
             model_name='provider',
             name='is_claimed',

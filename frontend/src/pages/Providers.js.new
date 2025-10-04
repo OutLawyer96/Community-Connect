@@ -1,0 +1,207 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, Filter, MapPin, Star, Clock, Grid, List, Map, DollarSign } from 'lucide-react';
+import apiClient from '../config/axios';
+import API_CONFIG, { APP_CONFIG } from '../config/api';
+import ProvidersMap from '../components/Map';
+import SearchFilters from '../components/SearchFilters';
+import { ProviderClaimStatus } from '../components/claims/ClaimStatusBadge';
+import AnimatedPage from '../components/animations/AnimatedPage';
+import ScrollReveal from '../components/animations/ScrollReveal';
+import StaggeredList from '../components/animations/StaggeredList';
+import InteractiveCard from '../components/animations/InteractiveCard';
+
+function Providers() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [providers, setProviders] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState('grid');
+  const [totalPages, setTotalPages] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [filters, setFilters] = useState(() => ({
+    search: searchParams.get('search') || '',
+    category: searchParams.get('category') || '',
+    city: searchParams.get('city') || '',
+    min_rating: searchParams.get('min_rating') || '',
+    status: searchParams.get('status') || '',
+    lat: searchParams.get('lat') ? parseFloat(searchParams.get('lat')) : null,
+    lng: searchParams.get('lng') ? parseFloat(searchParams.get('lng')) : null,
+    radius: searchParams.get('radius') ? parseFloat(searchParams.get('radius')) : null,
+    min_price: searchParams.get('min_price') ? parseFloat(searchParams.get('min_price')) : null,
+    max_price: searchParams.get('max_price') ? parseFloat(searchParams.get('max_price')) : null,
+    available_at: searchParams.get('available_at') || '',
+    available_today: searchParams.get('available_today') === 'true',
+    verified_only: searchParams.get('verified_only') === 'true',
+    ordering: searchParams.get('ordering') || '',
+  }));
+  const abortRef = useRef(null);
+
+  // ... Rest of your existing fetch and handler functions ...
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.4,
+      },
+    },
+  };
+
+  const renderProviderCard = (provider) => (
+    <InteractiveCard 
+      key={provider.id}
+      className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300"
+      onClick={() => navigate(`/providers/${provider.id}`)}
+    >
+      <div className="p-6">
+        <div className="flex items-start justify-between">
+          <div>
+-            <h3 className="text-lg font-semibold text-gray-900">{provider.name}</h3>
+            <h3 className="text-lg font-semibold text-gray-900">{provider.business_name}</h3>
+            <p className="text-sm text-gray-500">{provider.category?.name || 'Uncategorized'}</p>
+          </div>
+          {provider.rating && (
+            <div className="flex items-center">
+              <Star className="w-4 h-4 text-yellow-400" />
+              <span className="ml-1 text-sm font-medium text-gray-600">{provider.rating.toFixed(1)}</span>
+            </div>
+          )}
+        </div>
+        <div className="mt-4 flex items-center text-sm text-gray-500">
+          <MapPin className="w-4 h-4 mr-1" />
+          <span>{provider.city}</span>
+        </div>
+        {/* Add more provider details as needed */}
+      </div>
+    </InteractiveCard>
+  );  );
+
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="flex justify-center items-center min-h-[400px]"
+        >
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500" />
+        </motion.div>
+      );
+    }
+
+    if (viewMode === 'map') {
+      return (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.4 }}
+          className="h-[calc(100vh-200px)] w-full"
+        >
+          <ProvidersMap providers={providers} />
+        </motion.div>
+      );
+    }
+
+    return (
+      <StaggeredList
+        className={`grid gap-6 ${
+          viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'
+        }`}
+      >
+        {providers.map(renderProviderCard)}
+      </StaggeredList>
+    );
+  };
+
+  return (
+    <AnimatedPage>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header Section */}
+        <ScrollReveal>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Service Providers</h1>
+              <p className="mt-2 text-sm text-gray-500">
+                Find and connect with trusted service providers in your area
+              </p>
+            </div>
+            
+            <div className="mt-4 md:mt-0 flex items-center space-x-4">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setViewMode('grid')}
+                className={`p-2 rounded-lg ${
+                  viewMode === 'grid' ? 'bg-indigo-100 text-indigo-600' : 'text-gray-500'
+                }`}
+              >
+                <Grid className="w-5 h-5" />
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setViewMode('list')}
+                className={`p-2 rounded-lg ${
+                  viewMode === 'list' ? 'bg-indigo-100 text-indigo-600' : 'text-gray-500'
+                }`}
+              >
+                <List className="w-5 h-5" />
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setViewMode('map')}
+                className={`p-2 rounded-lg ${
+                  viewMode === 'map' ? 'bg-indigo-100 text-indigo-600' : 'text-gray-500'
+                }`}
+              >
+                <Map className="w-5 h-5" />
+              </motion.button>
+            </div>
+          </div>
+        </ScrollReveal>
+
+        {/* Filters Section */}
+        <ScrollReveal>
+          <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+            <SearchFilters
+              filters={filters}
+              setFilters={setFilters}
+              categories={categories}
+            />
+          </div>
+        </ScrollReveal>
+
+        {/* Content Section */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={viewMode}
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+          >
+            {renderContent()}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </AnimatedPage>
+  );
+}
+
+export default Providers;

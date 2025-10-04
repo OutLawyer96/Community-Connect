@@ -11,13 +11,14 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.throttling import UserRateThrottle, AnonRateThrottle
+from rest_framework.exceptions import PermissionDenied, ValidationError
 import math
 
-from .models import Category, Provider, User, Service, Address, Review, Favorite, Claim, Availability, Notification, NotificationPreference, MessageThread, Message, UserBehavior, UserRecommendation, ABTestVariant
+from .models import Category, Provider, User, Service, Address, Review, ReviewReport, Favorite, Claim, Availability, Notification, NotificationPreference, MessageThread, Message, UserBehavior, UserRecommendation, ABTestVariant
 from .serializers import (
     CategorySerializer, ProviderSerializer, ProviderListSerializer, 
     UserSerializer, UserProfileSerializer, ServiceSerializer, AddressSerializer, 
-    ReviewSerializer, UserReviewSerializer, LoginSerializer, ClaimSerializer, ClaimCreateSerializer,
+    ReviewSerializer, ReviewReportSerializer, UserReviewSerializer, LoginSerializer, ClaimSerializer, ClaimCreateSerializer,
     FavoriteSerializer, ProviderAnalyticsSerializer, NotificationSerializer, NotificationPreferenceSerializer,
     MessageThreadSerializer, MessageSerializer, MessageCreateSerializer, UserBehaviorSerializer,
     RecommendationSerializer, ABTestVariantSerializer, EnhancedProviderListSerializer
@@ -764,10 +765,8 @@ class ProviderCreateView(generics.CreateAPIView):
     def perform_create(self, serializer):
         # Only users with 'provider' role can create provider profiles
         if self.request.user.role != 'provider':
-            self.request.user.role = 'provider'
-            self.request.user.save()
+            raise PermissionDenied("Only users with provider role can create provider profiles")
         serializer.save(user=self.request.user)
-
 class ProviderUpdateView(generics.UpdateAPIView):
     queryset = Provider.objects.all()
     serializer_class = ProviderSerializer
@@ -792,7 +791,10 @@ class ServiceCreateView(generics.CreateAPIView):
     permission_classes = [IsAuthenticated]
     
     def perform_create(self, serializer):
-        provider = Provider.objects.get(user=self.request.user)
+        try:
+            provider = Provider.objects.get(user=self.request.user)
+        except Provider.DoesNotExist:
+            raise ValidationError("You must have a provider profile to create services")
         serializer.save(provider=provider)
 
 # Address Views
@@ -845,6 +847,120 @@ class ReviewCreateView(generics.CreateAPIView):
     def perform_create(self, serializer):
         provider_id = self.kwargs.get('provider_id')
         serializer.save(user=self.request.user, provider_id=provider_id)
+
+class ReviewReportCreateView(generics.CreateAPIView):
+    """View for creating review reports"""
+    queryset = ReviewReport.objects.all()
+    serializer_class = ReviewReportSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def perform_create(self, serializer):
+        review_id = self.kwargs.get('pk')
+        serializer.save(reporter=self.request.user, review_id=review_id)
+
+class ReviewModerationView(generics.UpdateAPIView):
+    """View for moderating reviews (admin only)"""
+    queryset = Review.objects.all()
+    serializer_class = ReviewSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def perform_update(self, serializer):
+        # Only admins can moderate
+        if not self.request.user.is_staff:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Only administrators can moderate reviews.")
+        serializer.save()
+
+class ReviewModerationStatsView(generics.ListAPIView):
+    """View for getting review moderation statistics (admin only)"""
+    permission_classes = [IsAuthenticated]
+    
+    def list(self, request):
+        # Only admins can view stats
+        if not request.user.is_staff:
+            raise PermissionDenied("Only administrators can view moderation statistics.")
+        
+        stats = {
+            'total_reports': ReviewReport.objects.count(),
+            'pending_reports': ReviewReport.objects.filter(resolved=False).count(),
+            'resolved_reports': ReviewReport.objects.filter(resolved=True).count(),
+            'total_reviews': Review.objects.count(),
+        }
+        return Response(stats)
+class ReviewModerationQueueView(generics.ListAPIView):
+    """View for getting reviews pending moderation (admin only)"""
+    serializer_class = ReviewSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        # Only admins can view moderation queue
+        if not self.request.user.is_staff:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Only administrators can view moderation queue.")
+        
+        return Review.objects.filter(status='pending').order_by('-created_at')
+
+class ReviewReportListView(generics.ListAPIView):
+    """View for listing all review reports (admin only)"""
+    serializer_class = ReviewReportSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        # Only admins can view reports
+        if not self.request.user.is_staff:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Only administrators can view reports.")
+        
+        return ReviewReport.objects.all().order_by('-created_at')
+
+class ReviewReportDetailView(generics.RetrieveAPIView):
+    """View for getting review report details (admin only)"""
+    queryset = ReviewReport.objects.all()
+    serializer_class = ReviewReportSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        # Only admins can view report details
+        if not self.request.user.is_staff:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Only administrators can view report details.")
+        
+        return ReviewReport.objects.all()
+
+class ReviewReportResolveView(generics.UpdateAPIView):
+    """View for resolving review reports (admin only)"""
+    queryset = ReviewReport.objects.all()
+    serializer_class = ReviewReportSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def perform_update(self, serializer):
+        # Only admins can resolve reports
+        if not self.request.user.is_staff:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Only administrators can resolve reports.")
+        
+        serializer.save(resolved=True, resolved_by=self.request.user)
+
+class PurchaseVerificationCreateView(generics.CreateAPIView):
+    """Placeholder view for purchase verification creation"""
+    permission_classes = [IsAuthenticated]
+    
+    def create(self, request):
+        return Response({"message": "Purchase verification feature coming soon"}, status=status.HTTP_501_NOT_IMPLEMENTED)
+
+class PurchaseVerificationDetailView(generics.RetrieveAPIView):
+    """Placeholder view for purchase verification details"""
+    permission_classes = [IsAuthenticated]
+    
+    def retrieve(self, request, pk=None):
+        return Response({"message": "Purchase verification feature coming soon"}, status=status.HTTP_501_NOT_IMPLEMENTED)
+
+class PurchaseVerificationValidateView(generics.GenericAPIView):
+    """Placeholder view for purchase verification validation"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        return Response({"message": "Purchase verification feature coming soon"}, status=status.HTTP_501_NOT_IMPLEMENTED)
 
 # Recommendation View
 @api_view(['GET'])
@@ -1123,15 +1239,15 @@ class ProviderAnalyticsView(generics.GenericAPIView):
             'total_favorites': total_favorites,
             'rating_distribution': rating_distribution,
             'monthly_review_counts': monthly_review_counts,
-            'recent_reviews_trend': recent_reviews_trend
         }
         
-        return Response(analytics_data)
+        serializer = ProviderAnalyticsSerializer(analytics_data)
+        return Response(serializer.data)
 
 
-# =====================
-# CLAIM MANAGEMENT VIEWS
-# =====================
+# Import for claim verification
+from django.utils.crypto import constant_time_compare
+
 
 class ClaimListCreateView(generics.ListCreateAPIView):
     """

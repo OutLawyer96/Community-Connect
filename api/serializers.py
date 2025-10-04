@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.db.models import Avg
-from .models import (Category, Provider, User, Service, Address, Review, Claim, Availability, Favorite,
+from .models import (Category, Provider, User, Service, Address, Review, ReviewReport, Claim, Availability, Favorite,
                      Notification, NotificationPreference, MessageThread, Message, UserBehavior, 
                      UserRecommendation, ABTestVariant)
 
@@ -133,6 +133,24 @@ class ReviewSerializer(serializers.ModelSerializer):
         fields = ['id', 'user', 'user_name', 'rating', 'comment', 'created_at']
         read_only_fields = ['user', 'created_at']
 
+class ReviewReportSerializer(serializers.ModelSerializer):
+    reporter_username = serializers.CharField(source='reporter.username', read_only=True)
+    review_details = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ReviewReport
+        fields = ['id', 'review', 'review_details', 'reporter', 'reporter_username', 'reason', 'details', 'created_at', 'resolved']
+        read_only_fields = ['reporter', 'created_at', 'resolved']
+    
+    def get_review_details(self, obj):
+        if not obj.review:
+            return None
+        return {
+            'id': obj.review.id,
+            'rating': obj.review.rating,
+            'comment': obj.review.comment,
+            'user': obj.review.user.username if obj.review.user else None
+        }
 class ProviderSerializer(serializers.ModelSerializer):
     user = serializers.SlugRelatedField(
         slug_field='username',

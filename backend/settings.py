@@ -138,6 +138,7 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+
 # Database configuration using environment variables
 DATABASE_ENGINE = config('DATABASE_ENGINE', default='django.db.backends.sqlite3')
 
@@ -150,19 +151,14 @@ if DATABASE_ENGINE == 'django.db.backends.sqlite3':
     }
 else:
     # PostgreSQL or other database
-    # Use PostGIS backend for PostgreSQL to enable geospatial features
-    engine = DATABASE_ENGINE
-    if DATABASE_ENGINE == 'django.db.backends.postgresql':
-        engine = 'django.contrib.gis.db.backends.postgis'
-    
     DATABASES = {
         'default': {
-            'ENGINE': engine,
+            'ENGINE': DATABASE_ENGINE,
             'NAME': config('DATABASE_NAME'),
             'USER': config('DATABASE_USER'),
             'PASSWORD': config('DATABASE_PASSWORD'),
             'HOST': config('DATABASE_HOST', default='127.0.0.1'),
-            'PORT': config('DATABASE_PORT', default='5432'),
+            'PORT': config('DATABASE_PORT', default=5432, cast=int),
         }
     }
 

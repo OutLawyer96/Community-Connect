@@ -48,15 +48,6 @@ urlpatterns = [
     path('reviews/<int:pk>/report/', views.ReviewReportCreateView.as_view(), name='review-report'),
     path('reviews/<int:pk>/moderate/', views.ReviewModerationView.as_view(), name='review-moderate'),
     path('reviews/moderation/stats/', views.ReviewModerationStatsView.as_view(), name='review-moderation-stats'),
-    path('reviews/moderation/queue/', views.ReviewModerationQueueView.as_view(), name='review-moderation-queue'),
-    path('reviews/reports/', views.ReviewReportListView.as_view(), name='review-report-list'),
-    path('reviews/reports/<int:pk>/', views.ReviewReportDetailView.as_view(), name='review-report-detail'),
-    path('reviews/reports/<int:pk>/resolve/', views.ReviewReportResolveView.as_view(), name='review-report-resolve'),
-    
-    # Purchase verification endpoints
-    path('purchase-verification/create/', views.PurchaseVerificationCreateView.as_view(), name='purchase-verification-create'),
-    path('purchase-verification/<int:pk>/', views.PurchaseVerificationDetailView.as_view(), name='purchase-verification-detail'),
-    path('purchase-verification/validate/', views.PurchaseVerificationValidateView.as_view(), name='purchase-verification-validate'),
     
     # Notification endpoints
     path('notifications/', views.NotificationListView.as_view(), name='notification-list'),

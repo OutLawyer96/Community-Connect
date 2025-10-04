@@ -1,149 +1,159 @@
-import React from 'react';
-import { Routes, Route } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
-import { NotificationProvider } from './contexts/NotificationContext';
-import Navbar from './components/Layout/Navbar';
-import Footer from './components/Layout/Footer';
-import Home from './pages/Home';
-import Providers from './pages/Providers';
-import ProviderDetail from './pages/ProviderDetail';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
-import EditProfile from './pages/EditProfile';
-import Favorites from './pages/Favorites';
-import MyReviews from './pages/MyReviews';
-import ProviderAnalytics from './pages/ProviderAnalytics';
-import PrivateRoute from './components/Auth/PrivateRoute';
-import AdminRoute from './components/Auth/AdminRoute';
-// Claim System Components
-import UnclaimedProviders from './pages/UnclaimedProviders';
-import ClaimForm from './pages/ClaimForm';
-import MyClaims from './pages/MyClaims';
-import ClaimDetail from './pages/ClaimDetail';
-import AdminClaimManager from './pages/AdminClaimManager';
-// Notification and Messaging Components
-import Notifications from './pages/Notifications';
-import Messages from './pages/Messages';
+import React from "react";
+import { Routes, Route, useLocation, Navigate } from "react-router-dom";
+import { AnimatePresence } from "framer-motion";
+import { AuthProvider } from "./contexts/AuthContext";
+import { NotificationProvider } from "./contexts/NotificationContext";
+import MainLayout from "./components/MainLayout";
+
+// Page Components
+import Home from "./pages/Home";
+import Providers from "./pages/Providers";
+import ProviderDetail from "./pages/ProviderDetail";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Dashboard from "./pages/Dashboard";
+import EditProfile from "./pages/EditProfile";
+import Favorites from "./pages/Favorites";
+import MyReviews from "./pages/MyReviews";
+import ProviderAnalytics from "./pages/ProviderAnalytics";
+import UnclaimedProviders from "./pages/UnclaimedProviders";
+import ClaimForm from "./pages/ClaimForm";
+import MyClaims from "./pages/MyClaims";
+import ClaimDetail from "./pages/ClaimDetail";
+import AdminClaimManager from "./pages/AdminClaimManager";
+import Notifications from "./pages/Notifications";
+import Messages from "./pages/Messages";
+
+// Route Guards
+import PrivateRoute from "./components/Auth/PrivateRoute";
+import AdminRoute from "./components/Auth/AdminRoute";
 
 function App() {
+  const location = useLocation();
+
   return (
     <AuthProvider>
       <NotificationProvider>
-        <div className="min-h-screen bg-gray-50 flex flex-col">
-          <Navbar />
-          <main className="flex-grow">
-            <Routes>
+        <MainLayout>
+          <AnimatePresence mode="wait">
+            <Routes location={location}>
+              {/* Public Routes */}
               <Route path="/" element={<Home />} />
               <Route path="/providers" element={<Providers />} />
+              <Route path="/search" element={<Providers />} />
               <Route path="/providers/:id" element={<ProviderDetail />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
-              <Route 
-                path="/dashboard" 
+
+              {/* Protected Routes */}
+              <Route
+                path="/dashboard"
                 element={
                   <PrivateRoute>
                     <Dashboard />
                   </PrivateRoute>
-                } 
+                }
               />
-              
-              {/* Profile Routes */}
-              <Route 
-                path="/profile" 
+              <Route
+                path="/profile"
                 element={
                   <PrivateRoute>
                     <EditProfile />
                   </PrivateRoute>
-                } 
+                }
               />
-              
-              {/* Favorites Routes */}
-              <Route 
-                path="/favorites" 
+              <Route
+                path="/favorites"
                 element={
                   <PrivateRoute>
                     <Favorites />
                   </PrivateRoute>
-                } 
+                }
               />
-              
-              {/* Reviews Routes */}
-              <Route 
-                path="/my-reviews" 
+              <Route
+                path="/my-reviews"
                 element={
                   <PrivateRoute>
                     <MyReviews />
                   </PrivateRoute>
-                } 
+                }
               />
-              
-              {/* Provider Analytics Routes */}
-              <Route 
-                path="/provider-analytics" 
+              <Route
+                path="/provider-analytics"
                 element={
                   <PrivateRoute>
                     <ProviderAnalytics />
                   </PrivateRoute>
-                } 
+                }
               />
-              
-              {/* Notification and Messaging Routes */}
-              <Route 
-                path="/notifications" 
+
+              {/* Claims Routes */}
+              <Route
+                path="/unclaimed-providers"
                 element={
                   <PrivateRoute>
-                    <Notifications />
+                    <UnclaimedProviders />
                   </PrivateRoute>
-                } 
+                }
               />
-              <Route 
-                path="/messages" 
-                element={
-                  <PrivateRoute>
-                    <Messages />
-                  </PrivateRoute>
-                } 
-              />
-              
-              {/* Claim System Routes */}
-              <Route path="/claim-business" element={<UnclaimedProviders />} />
-              <Route 
-                path="/claim-business/:providerId" 
+              <Route
+                path="/claim-business"
                 element={
                   <PrivateRoute>
                     <ClaimForm />
                   </PrivateRoute>
-                } 
+                }
               />
-              <Route 
-                path="/my-claims" 
+              <Route
+                path="/my-claims"
                 element={
                   <PrivateRoute>
                     <MyClaims />
                   </PrivateRoute>
-                } 
+                }
               />
-              <Route 
-                path="/my-claims/:claimId" 
+              <Route
+                path="/claims/:id"
                 element={
                   <PrivateRoute>
                     <ClaimDetail />
                   </PrivateRoute>
-                } 
+                }
               />
-              <Route 
-                path="/admin/claims" 
+
+              {/* Admin Routes */}
+              <Route
+                path="/admin/claims"
                 element={
                   <AdminRoute>
                     <AdminClaimManager />
                   </AdminRoute>
-                } 
+                }
               />
+
+              {/* Notification & Message Routes */}
+              <Route
+                path="/notifications"
+                element={
+                  <PrivateRoute>
+                    <Notifications />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/messages"
+                element={
+                  <PrivateRoute>
+                    <Messages />
+                  </PrivateRoute>
+                }
+              />
+
+              {/* Catch-all route - redirect to home or show 404 */}
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-          </main>
-          <Footer />
-        </div>
+          </AnimatePresence>
+        </MainLayout>
       </NotificationProvider>
     </AuthProvider>
   );

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useSpring, animated } from "@react-spring/web";
 import { useInView } from "react-intersection-observer";
 import { Star, MapPin, MessageCircle } from "lucide-react";
+import SpotlightCard from "./SpotlightCard";
 
 const ProviderCard = ({ provider, index }) => {
   const [ref, inView] = useInView({
@@ -34,58 +35,60 @@ const ProviderCard = ({ provider, index }) => {
   };
 
   return (
-    <animated.div
-      ref={ref}
-      style={{ ...springProps, ...hoverProps }}
-      onMouseEnter={onHover}
-      onMouseLeave={onLeave}
-      className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300"
-    >
-      <Link to={`/providers/${provider.id}`}>
-        {provider.image && (
-          <div className="relative h-48 overflow-hidden">
-            <animated.img
-              src={provider.image}
-              alt={provider.name}
-              className="w-full h-full object-cover"
-              style={{
-                transform: hoverProps.scale.to((s) => `scale(${s})`),
-              }}
-            />
+    <SpotlightCard spotlightColor="rgba(14, 165, 233, 0.25)" className="">
+      <animated.div
+        ref={ref}
+        style={{ ...springProps, ...hoverProps }}
+        onMouseEnter={onHover}
+        onMouseLeave={onLeave}
+        className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300"
+      >
+        <Link to={`/providers/${provider.id}`}>
+          {provider.image && (
+            <div className="relative h-48 overflow-hidden">
+              <animated.img
+                src={provider.image}
+                alt={provider.name}
+                className="w-full h-full object-cover"
+                style={{
+                  transform: hoverProps.scale.to((s) => `scale(${s})`),
+                }}
+              />
+            </div>
+          )}
+          <div className="p-4">
+            <h3 className="text-xl font-semibold mb-2">{provider.name}</h3>
+            <div className="flex items-center mb-2">
+              <MapPin className="w-4 h-4 text-gray-500 mr-1" />
+              <span className="text-gray-600 text-sm">{provider.location}</span>
+            </div>
+            <div className="flex items-center mb-2">
+              <Star className="w-4 h-4 text-yellow-400 mr-1" />
+              <span className="text-gray-600">
+                {provider.rating} ({provider.reviewCount} reviews)
+              </span>
+            </div>
+            <p className="text-gray-600 mb-4 line-clamp-2">
+              {provider.description}
+            </p>
+            <div className="flex justify-between items-center">
+              <animated.button
+                className="flex items-center text-blue-600 hover:text-blue-800"
+                style={{
+                  transform: hoverProps.scale.to((s) => `scale(${s})`),
+                }}
+              >
+                <MessageCircle className="w-4 h-4 mr-1" />
+                Contact
+              </animated.button>
+              <span className="text-gray-500 text-sm">
+                {provider.distance} away
+              </span>
+            </div>
           </div>
-        )}
-        <div className="p-4">
-          <h3 className="text-xl font-semibold mb-2">{provider.name}</h3>
-          <div className="flex items-center mb-2">
-            <MapPin className="w-4 h-4 text-gray-500 mr-1" />
-            <span className="text-gray-600 text-sm">{provider.location}</span>
-          </div>
-          <div className="flex items-center mb-2">
-            <Star className="w-4 h-4 text-yellow-400 mr-1" />
-            <span className="text-gray-600">
-              {provider.rating} ({provider.reviewCount} reviews)
-            </span>
-          </div>
-          <p className="text-gray-600 mb-4 line-clamp-2">
-            {provider.description}
-          </p>
-          <div className="flex justify-between items-center">
-            <animated.button
-              className="flex items-center text-blue-600 hover:text-blue-800"
-              style={{
-                transform: hoverProps.scale.to((s) => `scale(${s})`),
-              }}
-            >
-              <MessageCircle className="w-4 h-4 mr-1" />
-              Contact
-            </animated.button>
-            <span className="text-gray-500 text-sm">
-              {provider.distance} away
-            </span>
-          </div>
-        </div>
-      </Link>
-    </animated.div>
+        </Link>
+      </animated.div>
+    </SpotlightCard>
   );
 };
 
