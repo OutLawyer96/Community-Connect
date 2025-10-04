@@ -3,13 +3,13 @@ import Lottie from "lottie-react";
 
 /**
  * FavoriteButton - Animated heart button using Lottie
- * 
+ *
  * Implementation Strategy:
  * - Uses lottie-react to render a heart animation
  * - Plays animation on click using lottieRef.current.play()
  * - Manages favorite state (isFavorite) to toggle between filled/unfilled
  * - Animation plays from frame 0-60 for the fill/burst effect
- * 
+ *
  * Integration: Use inside ProviderCard.js
  * Example: <FavoriteButton providerId={provider.id} onToggle={handleFavorite} />
  */
@@ -43,12 +43,27 @@ const FavoriteButton = ({ providerId, onToggle, initialFavorite = false }) => {
           s: {
             a: 1,
             k: [
-              { i: { x: [0.667], y: [1] }, o: { x: [0.333], y: [0] }, t: 0, s: [100, 100, 100] },
-              { i: { x: [0.667], y: [1] }, o: { x: [0.333], y: [0] }, t: 15, s: [120, 120, 100] },
-              { i: { x: [0.667], y: [1] }, o: { x: [0.333], y: [0] }, t: 30, s: [100, 100, 100] },
-              { t: 45, s: [110, 110, 100] }
-            ]
-          }
+              {
+                i: { x: [0.667], y: [1] },
+                o: { x: [0.333], y: [0] },
+                t: 0,
+                s: [100, 100, 100],
+              },
+              {
+                i: { x: [0.667], y: [1] },
+                o: { x: [0.333], y: [0] },
+                t: 15,
+                s: [120, 120, 100],
+              },
+              {
+                i: { x: [0.667], y: [1] },
+                o: { x: [0.333], y: [0] },
+                t: 30,
+                s: [100, 100, 100],
+              },
+              { t: 45, s: [110, 110, 100] },
+            ],
+          },
         },
         ao: 0,
         shapes: [
@@ -61,12 +76,45 @@ const FavoriteButton = ({ providerId, onToggle, initialFavorite = false }) => {
                 ks: {
                   a: 0,
                   k: {
-                    i: [[0, 0], [0, 0], [-10, -10], [0, -15], [15, 0], [10, 10], [10, -10], [15, 0], [0, 15], [-10, 10]],
-                    o: [[0, 0], [10, -10], [15, 0], [0, 15], [-10, 10], [-10, 10], [10, 10], [15, 0], [0, -15], [-10, -10]],
-                    v: [[0, 15], [0, 15], [15, -5], [35, -5], [35, 10], [15, 30], [0, 45], [-15, 30], [-35, 10], [-35, -5]],
-                    c: true
-                  }
-                }
+                    i: [
+                      [0, 0],
+                      [0, 0],
+                      [-10, -10],
+                      [0, -15],
+                      [15, 0],
+                      [10, 10],
+                      [10, -10],
+                      [15, 0],
+                      [0, 15],
+                      [-10, 10],
+                    ],
+                    o: [
+                      [0, 0],
+                      [10, -10],
+                      [15, 0],
+                      [0, 15],
+                      [-10, 10],
+                      [-10, 10],
+                      [10, 10],
+                      [15, 0],
+                      [0, -15],
+                      [-10, -10],
+                    ],
+                    v: [
+                      [0, 15],
+                      [0, 15],
+                      [15, -5],
+                      [35, -5],
+                      [35, 10],
+                      [15, 30],
+                      [0, 45],
+                      [-15, 30],
+                      [-35, 10],
+                      [-35, -5],
+                    ],
+                    c: true,
+                  },
+                },
               },
               {
                 ty: "fl",
@@ -75,11 +123,11 @@ const FavoriteButton = ({ providerId, onToggle, initialFavorite = false }) => {
                   k: [
                     { t: 0, s: [0.5, 0.5, 0.5, 1] },
                     { t: 15, s: [1, 0.2, 0.3, 1] },
-                    { t: 30, s: [1, 0.1, 0.2, 1] }
-                  ]
+                    { t: 30, s: [1, 0.1, 0.2, 1] },
+                  ],
                 },
                 o: { a: 0, k: 100 },
-                r: 1
+                r: 1,
               },
               {
                 ty: "tr",
@@ -87,13 +135,13 @@ const FavoriteButton = ({ providerId, onToggle, initialFavorite = false }) => {
                 a: { a: 0, k: [0, 0] },
                 s: { a: 0, k: [100, 100] },
                 r: { a: 0, k: 0 },
-                o: { a: 0, k: 100 }
-              }
-            ]
-          }
-        ]
-      }
-    ]
+                o: { a: 0, k: 100 },
+              },
+            ],
+          },
+        ],
+      },
+    ],
   };
 
   const handleClick = () => {
@@ -105,7 +153,7 @@ const FavoriteButton = ({ providerId, onToggle, initialFavorite = false }) => {
 
     const newFavoriteState = !isFavorite;
     setIsFavorite(newFavoriteState);
-    
+
     // Callback to parent component
     if (onToggle) {
       onToggle(providerId, newFavoriteState);

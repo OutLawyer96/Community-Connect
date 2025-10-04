@@ -54,7 +54,9 @@ export default function Iridescence({
   const uniformsRef = useRef(null);
 
   // Detect touch devices to disable mouse react by default
-  const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  const isTouch =
+    typeof window !== "undefined" &&
+    ("ontouchstart" in window || navigator.maxTouchPoints > 0);
   const enableMouseReact = !isTouch && mouseReact;
 
   // Initialize WebGL once
@@ -69,9 +71,9 @@ export default function Iridescence({
 
     try {
       // Use devicePixelRatio for crisp rendering, capped at 1.5 for performance
-      const renderer = new Renderer({ 
+      const renderer = new Renderer({
         alpha: true,
-        dpr: Math.min(window.devicePixelRatio || 1, 1.5)
+        dpr: Math.min(window.devicePixelRatio || 1, 1.5),
       });
       const gl = renderer.gl;
 

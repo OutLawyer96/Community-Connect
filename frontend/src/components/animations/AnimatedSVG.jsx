@@ -3,13 +3,13 @@ import { motion } from "framer-motion";
 
 /**
  * AnimatedSVG - SVG path drawing animation
- * 
+ *
  * Implementation Strategy:
  * - Uses stroke-dasharray and stroke-dashoffset for drawing effect
  * - pathLength property animates from 0 to 1
  * - Can animate multiple paths with stagger delay
  * - Works with any SVG path element
- * 
+ *
  * Integration: Use for logo animations, icons, or decorative elements
  * Example:
  * <AnimatedSVG
@@ -84,7 +84,8 @@ const AnimatedSVG = ({
  */
 export const AnimatedLogoExample = () => {
   // Example: Simple heart logo
-  const heartPath = "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z";
+  const heartPath =
+    "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z";
 
   return (
     <AnimatedSVG

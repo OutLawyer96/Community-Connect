@@ -3,13 +3,13 @@ import { motion } from "framer-motion";
 
 /**
  * AnimatedInput - Floating label input with smooth animations
- * 
+ *
  * Implementation Strategy:
  * - Uses Framer Motion to animate label position and scale
  * - Tracks focus state and value to determine label position
  * - Bottom border animates from left to right on focus
  * - Label moves up and scales down when input is focused or has value
- * 
+ *
  * Integration: Replace standard inputs in Login.js and Register.js
  * Example: <AnimatedInput label="Email" type="email" value={email} onChange={setEmail} />
  */
@@ -23,7 +23,7 @@ const AnimatedInput = ({
   ...props
 }) => {
   const [isFocused, setIsFocused] = useState(false);
-  
+
   // Label should be "floating" if input is focused or has a value
   const isFloating = isFocused || value;
 

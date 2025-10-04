@@ -3,14 +3,14 @@ import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 
 /**
  * TiltCard - 3D tilt effect based on mouse position
- * 
+ *
  * Implementation Strategy:
  * - useMotionValue tracks mouse X and Y without re-renders
  * - useTransform maps mouse position to rotation values
  * - useSpring adds smooth physics-based interpolation
  * - transform-style: preserve-3d enables 3D space
  * - rotateX/Y create the tilt effect
- * 
+ *
  * Integration: Wrap ProviderCard.js or any card component
  * Example:
  * <TiltCard>
@@ -79,9 +79,7 @@ const TiltCard = ({
       className={`${className}`}
     >
       {/* Inner content with slight translation for depth */}
-      <div style={{ transform: "translateZ(20px)" }}>
-        {children}
-      </div>
+      <div style={{ transform: "translateZ(20px)" }}>{children}</div>
     </motion.div>
   );
 };
@@ -110,8 +108,14 @@ export const TiltCardWithShine = ({
   );
 
   // Shine effect based on mouse position
-  const shineX = useSpring(useTransform(x, [0, 1], ["0%", "100%"]), springConfig);
-  const shineY = useSpring(useTransform(y, [0, 1], ["0%", "100%"]), springConfig);
+  const shineX = useSpring(
+    useTransform(x, [0, 1], ["0%", "100%"]),
+    springConfig
+  );
+  const shineY = useSpring(
+    useTransform(y, [0, 1], ["0%", "100%"]),
+    springConfig
+  );
 
   const handleMouseMove = (e) => {
     if (!ref.current) return;
@@ -151,9 +155,7 @@ export const TiltCardWithShine = ({
       />
 
       {/* Content */}
-      <div style={{ transform: "translateZ(20px)" }}>
-        {children}
-      </div>
+      <div style={{ transform: "translateZ(20px)" }}>{children}</div>
     </motion.div>
   );
 };

@@ -3,14 +3,14 @@ import { motion, useSpring } from "framer-motion";
 
 /**
  * Magnetic - Wrapper component with magnetic attraction effect
- * 
+ *
  * Implementation Strategy:
  * - useSpring creates smooth physics-based animations
  * - Calculates mouse distance from element center
  * - Translates element towards cursor within a radius
  * - Returns to origin when mouse leaves or moves too far
  * - High stiffness (150) and low damping (15) for snappy feel
- * 
+ *
  * Integration: Wrap buttons, links, or cards
  * Example:
  * <Magnetic>
@@ -47,7 +47,7 @@ const Magnetic = ({
     // Only apply magnetic effect within radius
     if (distance < radius) {
       setIsHovered(true);
-      
+
       // Apply magnetic pull with strength modifier
       // Closer to center = stronger pull
       const pullStrength = (1 - distance / radius) * strength;

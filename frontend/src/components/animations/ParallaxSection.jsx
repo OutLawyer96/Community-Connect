@@ -3,13 +3,13 @@ import { motion, useScroll, useTransform } from "framer-motion";
 
 /**
  * ParallaxSection - Scroll-based parallax effect
- * 
+ *
  * Implementation Strategy:
  * - useScroll tracks scroll progress of the component
  * - useTransform maps scroll progress to Y position
  * - Background moves slower (0.5x) than foreground creating depth
  * - Uses transform3d for GPU acceleration
- * 
+ *
  * Integration: Use on Home.js landing page
  * Example:
  * <ParallaxSection
@@ -67,9 +67,7 @@ const ParallaxSection = ({
       </motion.div>
 
       {/* Foreground Content */}
-      <div className="relative z-10 container mx-auto px-4">
-        {children}
-      </div>
+      <div className="relative z-10 container mx-auto px-4">{children}</div>
     </div>
   );
 };
@@ -91,7 +89,10 @@ export const MultiLayerParallax = ({ children, className = "" }) => {
   const y3 = useTransform(scrollYProgress, [0, 1], ["0%", "15%"]);
 
   return (
-    <div ref={ref} className={`relative min-h-screen overflow-hidden ${className}`}>
+    <div
+      ref={ref}
+      className={`relative min-h-screen overflow-hidden ${className}`}
+    >
       {/* Background Layer (slowest) */}
       <motion.div
         style={{ y: y1 }}
@@ -107,10 +108,7 @@ export const MultiLayerParallax = ({ children, className = "" }) => {
       </motion.div>
 
       {/* Foreground Layer (fastest) */}
-      <motion.div
-        style={{ y: y3 }}
-        className="absolute inset-0 -z-10"
-      >
+      <motion.div style={{ y: y3 }} className="absolute inset-0 -z-10">
         {/* Add decorative elements here */}
       </motion.div>
 

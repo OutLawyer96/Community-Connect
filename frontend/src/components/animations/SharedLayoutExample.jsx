@@ -4,25 +4,25 @@ import { useNavigate } from "react-router-dom";
 
 /**
  * Shared Layout Animation - "Magic Move" Transition
- * 
+ *
  * Implementation Strategy:
  * - Use layoutId prop on motion elements to create shared element transitions
  * - Same layoutId on both pages creates seamless morphing animation
  * - AnimatePresence in App.js wraps Routes to enable exit animations
- * 
+ *
  * Integration Instructions:
- * 
+ *
  * 1. In App.js, wrap your Routes with AnimatePresence:
- * 
+ *
  * import { AnimatePresence } from "framer-motion";
- * 
+ *
  * <AnimatePresence mode="wait">
  *   <Routes location={location} key={location.pathname}>
  *     <Route path="/providers" element={<Providers />} />
  *     <Route path="/providers/:id" element={<ProviderDetail />} />
  *   </Routes>
  * </AnimatePresence>
- * 
+ *
  * 2. In ProviderCard.js (on Providers.js page):
  */
 
@@ -46,7 +46,7 @@ export const ProviderCardWithSharedLayout = ({ provider }) => {
         alt={provider.name}
         className="w-full h-48 object-cover"
       />
-      
+
       <div className="p-4">
         <motion.h3
           layoutId={`provider-name-${provider.id}`}
@@ -54,7 +54,7 @@ export const ProviderCardWithSharedLayout = ({ provider }) => {
         >
           {provider.name}
         </motion.h3>
-        
+
         <p className="text-gray-600 mt-2">{provider.specialty}</p>
       </div>
     </motion.div>
@@ -79,7 +79,7 @@ export const ProviderDetailWithSharedLayout = ({ provider }) => {
         alt={provider.name}
         className="w-full h-96 object-cover rounded-lg"
       />
-      
+
       <div className="mt-6">
         <motion.h1
           layoutId={`provider-name-${provider.id}`}
@@ -87,7 +87,7 @@ export const ProviderDetailWithSharedLayout = ({ provider }) => {
         >
           {provider.name}
         </motion.h1>
-        
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

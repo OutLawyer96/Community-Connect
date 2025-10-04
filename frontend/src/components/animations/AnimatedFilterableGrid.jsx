@@ -3,23 +3,23 @@ import { motion, AnimatePresence } from "framer-motion";
 
 /**
  * AnimatedFilterableGrid - Smooth grid animations for filtering
- * 
+ *
  * Implementation Strategy:
  * - AnimatePresence enables exit animations for removed items
  * - layout prop on motion.div automatically animates position changes
  * - Each item gets unique key for proper animation tracking
  * - Stagger children for cascading entrance effect
  * - Exit animations fade out while new items fade in
- * 
+ *
  * Integration: Use in Providers.js for the provider grid
  * This component shows the pattern - adapt to your ProviderCard structure
- * 
+ *
  * Example in Providers.js:
  * const [filter, setFilter] = useState('all');
- * const filteredProviders = providers.filter(p => 
+ * const filteredProviders = providers.filter(p =>
  *   filter === 'all' || p.category === filter
  * );
- * 
+ *
  * <AnimatedProviderGrid providers={filteredProviders} />
  */
 
@@ -99,7 +99,12 @@ export const ProvidersGridExample = () => {
   const allProviders = [
     { id: 1, name: "Dr. Smith", category: "doctor", specialty: "Cardiology" },
     { id: 2, name: "Jane Lawyer", category: "lawyer", specialty: "Family Law" },
-    { id: 3, name: "Bob Builder", category: "contractor", specialty: "Construction" },
+    {
+      id: 3,
+      name: "Bob Builder",
+      category: "contractor",
+      specialty: "Construction",
+    },
     // ... more providers
   ];
 

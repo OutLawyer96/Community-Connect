@@ -104,7 +104,9 @@ const Navigation = ({ links, className = "" }) => {
             aria-expanded={isOpen}
             aria-label={isOpen ? "Close menu" : "Open menu"}
           >
-            <span className="sr-only">{isOpen ? "Close menu" : "Open menu"}</span>
+            <span className="sr-only">
+              {isOpen ? "Close menu" : "Open menu"}
+            </span>
             <svg
               className="h-6 w-6"
               fill="none"

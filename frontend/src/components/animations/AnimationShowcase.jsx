@@ -1,23 +1,23 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import FavoriteButton from './FavoriteButton';
-import AnimatedInput from './AnimatedInput';
-import ParallaxSection from './ParallaxSection';
-import { Magnetic, MagneticButton } from './Magnetic';
-import { AnimatedCheckmark, CommunityConnectLogo } from './AnimatedSVG';
-import { SkeletonCard, SkeletonProfile } from './ShimmeringSkeleton';
-import { ProvidersGridExample } from './AnimatedFilterableGrid';
-import TiltCard from './TiltCard';
+import React, { useState } from "react";
+import { motion } from "framer-motion";
+import FavoriteButton from "./FavoriteButton";
+import AnimatedInput from "./AnimatedInput";
+import ParallaxSection from "./ParallaxSection";
+import { Magnetic, MagneticButton } from "./Magnetic";
+import { AnimatedCheckmark, CommunityConnectLogo } from "./AnimatedSVG";
+import { SkeletonCard, SkeletonProfile } from "./ShimmeringSkeleton";
+import { ProvidersGridExample } from "./AnimatedFilterableGrid";
+import TiltCard from "./TiltCard";
 
 /**
  * AnimationShowcase - Demo page for all animation components
- * 
+ *
  * This page demonstrates all 9 animation features
  * Navigate to /animations-demo to see this page
  */
 const AnimationShowcase = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showSuccess, setShowSuccess] = useState(false);
 
   return (
@@ -35,7 +35,6 @@ const AnimationShowcase = () => {
       </div>
 
       <div className="container mx-auto px-4 pb-16">
-        
         {/* Section 1: Lottie Favorite Button */}
         <Section
           number="1"
@@ -45,8 +44,8 @@ const AnimationShowcase = () => {
           <div className="flex items-center justify-center p-8 bg-white rounded-lg">
             <FavoriteButton
               providerId="demo"
-              onToggle={(id, isFavorite) => 
-                console.log('Favorite toggled:', isFavorite)
+              onToggle={(id, isFavorite) =>
+                console.log("Favorite toggled:", isFavorite)
               }
             />
             <p className="ml-4 text-gray-600">Click the heart!</p>
@@ -130,7 +129,7 @@ const AnimationShowcase = () => {
                 Hover near me!
               </div>
             </Magnetic>
-            
+
             <MagneticButton className="bg-purple-600 text-white">
               Magnetic Button
             </MagneticButton>
@@ -212,28 +211,35 @@ const AnimationShowcase = () => {
         >
           <div className="p-8 bg-white rounded-lg text-center">
             <p className="text-gray-600 mb-4">
-              This animation creates seamless transitions between list and detail pages.
+              This animation creates seamless transitions between list and
+              detail pages.
             </p>
             <p className="text-sm text-gray-500">
-              Check the integration guide for implementation in your Providers and ProviderDetail pages.
+              Check the integration guide for implementation in your Providers
+              and ProviderDetail pages.
             </p>
           </div>
         </Section>
-
       </div>
     </div>
   );
 };
 
 // Helper component for sections
-const Section = ({ number, title, description, children, fullWidth = false }) => {
+const Section = ({
+  number,
+  title,
+  description,
+  children,
+  fullWidth = false,
+}) => {
   return (
     <motion.section
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.5 }}
-      className={`mb-16 ${fullWidth ? '' : 'max-w-4xl mx-auto'}`}
+      className={`mb-16 ${fullWidth ? "" : "max-w-4xl mx-auto"}`}
     >
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-2">

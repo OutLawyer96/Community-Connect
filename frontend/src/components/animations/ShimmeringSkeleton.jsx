@@ -3,15 +3,15 @@ import "./ShimmeringSkeleton.css";
 
 /**
  * ShimmeringSkeleton - Animated loading placeholder
- * 
+ *
  * Implementation Strategy:
  * - Uses CSS keyframes for smooth shimmer animation
  * - Linear gradient moves from left to right creating shine effect
  * - Accepts width, height, and variant props for flexibility
  * - Uses Tailwind for structure and custom CSS for animation
- * 
+ *
  * Integration: Use as placeholder in Providers.js while data loads
- * Example: 
+ * Example:
  * {loading ? (
  *   <ShimmeringSkeleton count={6} variant="card" />
  * ) : (

@@ -5,6 +5,7 @@ This guide shows you how to integrate all 9 advanced animation features into you
 ## 📦 Installation
 
 The required dependency has been installed:
+
 ```bash
 npm install lottie-react  # ✅ Installed
 ```
@@ -16,8 +17,9 @@ npm install lottie-react  # ✅ Installed
 **File**: `src/components/animations/FavoriteButton.jsx`
 
 **Usage in ProviderCard.js**:
+
 ```jsx
-import FavoriteButton from './animations/FavoriteButton';
+import FavoriteButton from "./animations/FavoriteButton";
 
 const ProviderCard = ({ provider }) => {
   const handleFavoriteToggle = (providerId, isFavorite) => {
@@ -49,13 +51,14 @@ const ProviderCard = ({ provider }) => {
 **File**: `src/components/animations/AnimatedInput.jsx`
 
 **Usage in Login.js**:
+
 ```jsx
-import AnimatedInput from './components/animations/AnimatedInput';
-import { useState } from 'react';
+import AnimatedInput from "./components/animations/AnimatedInput";
+import { useState } from "react";
 
 const Login = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [errors, setErrors] = useState({});
 
   return (
@@ -67,7 +70,7 @@ const Login = () => {
         onChange={setEmail}
         error={errors.email}
       />
-      
+
       <AnimatedInput
         label="Password"
         type="password"
@@ -75,7 +78,7 @@ const Login = () => {
         onChange={setPassword}
         error={errors.password}
       />
-      
+
       <button type="submit">Login</button>
     </form>
   );
@@ -89,9 +92,10 @@ const Login = () => {
 **Files**: `src/components/animations/SharedLayoutExample.jsx`
 
 **Step 1 - Update App.js**:
+
 ```jsx
-import { AnimatePresence } from 'framer-motion';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { AnimatePresence } from "framer-motion";
+import { Routes, Route, useLocation } from "react-router-dom";
 
 function App() {
   const location = useLocation();
@@ -108,9 +112,10 @@ function App() {
 ```
 
 **Step 2 - Update ProviderCard.js**:
+
 ```jsx
-import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 
 const ProviderCard = ({ provider }) => {
   const navigate = useNavigate();
@@ -128,7 +133,7 @@ const ProviderCard = ({ provider }) => {
         alt={provider.name}
         className="w-full h-48 object-cover"
       />
-      
+
       {/* Add layoutId to name */}
       <motion.h3
         layoutId={`provider-name-${provider.id}`}
@@ -142,8 +147,9 @@ const ProviderCard = ({ provider }) => {
 ```
 
 **Step 3 - Update ProviderDetail.js**:
+
 ```jsx
-import { motion } from 'framer-motion';
+import { motion } from "framer-motion";
 
 const ProviderDetail = () => {
   const { id } = useParams();
@@ -161,7 +167,7 @@ const ProviderDetail = () => {
         src={provider.image}
         className="w-full h-96 object-cover"
       />
-      
+
       <motion.h1
         layoutId={`provider-name-${id}`}
         className="text-4xl font-bold"
@@ -177,21 +183,23 @@ const ProviderDetail = () => {
 
 ### 4. Animated Skeleton Loader
 
-**Files**: 
+**Files**:
+
 - `src/components/animations/ShimmeringSkeleton.jsx`
 - `src/components/animations/ShimmeringSkeleton.css`
 
 **Usage in Providers.js**:
+
 ```jsx
-import { SkeletonCard } from './components/animations/ShimmeringSkeleton';
-import { useState, useEffect } from 'react';
+import { SkeletonCard } from "./components/animations/ShimmeringSkeleton";
+import { useState, useEffect } from "react";
 
 const Providers = () => {
   const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchProviders().then(data => {
+    fetchProviders().then((data) => {
       setProviders(data);
       setLoading(false);
     });
@@ -199,16 +207,12 @@ const Providers = () => {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {loading ? (
-        // Show skeleton loaders while loading
-        Array.from({ length: 6 }).map((_, i) => (
-          <SkeletonCard key={i} />
-        ))
-      ) : (
-        providers.map(provider => (
-          <ProviderCard key={provider.id} {...provider} />
-        ))
-      )}
+      {loading
+        ? // Show skeleton loaders while loading
+          Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)
+        : providers.map((provider) => (
+            <ProviderCard key={provider.id} {...provider} />
+          ))}
     </div>
   );
 };
@@ -221,8 +225,9 @@ const Providers = () => {
 **File**: `src/components/animations/ParallaxSection.jsx`
 
 **Usage in Home.js**:
+
 ```jsx
-import ParallaxSection from './components/animations/ParallaxSection';
+import ParallaxSection from "./components/animations/ParallaxSection";
 
 const Home = () => {
   return (
@@ -259,8 +264,9 @@ const Home = () => {
 **File**: `src/components/animations/Magnetic.jsx`
 
 **Usage - Wrap any button or card**:
+
 ```jsx
-import { Magnetic, MagneticButton } from './components/animations/Magnetic';
+import { Magnetic, MagneticButton } from "./components/animations/Magnetic";
 
 const Home = () => {
   return (
@@ -274,7 +280,7 @@ const Home = () => {
 
       {/* Or use pre-configured MagneticButton */}
       <MagneticButton
-        onClick={() => navigate('/providers')}
+        onClick={() => navigate("/providers")}
         className="bg-indigo-600 text-white"
       >
         Browse Providers
@@ -291,8 +297,12 @@ const Home = () => {
 **File**: `src/components/animations/AnimatedSVG.jsx`
 
 **Usage - Animated logo on page load**:
+
 ```jsx
-import { CommunityConnectLogo, AnimatedCheckmark } from './components/animations/AnimatedSVG';
+import {
+  CommunityConnectLogo,
+  AnimatedCheckmark,
+} from "./components/animations/AnimatedSVG";
 
 const Navbar = () => {
   return (
@@ -321,27 +331,28 @@ const SuccessMessage = () => {
 **File**: `src/components/animations/AnimatedFilterableGrid.jsx`
 
 **Usage in Providers.js**:
+
 ```jsx
-import { AnimatedProviderGrid } from './components/animations/AnimatedFilterableGrid';
-import { useState, useMemo } from 'react';
-import ProviderCard from './components/ProviderCard';
+import { AnimatedProviderGrid } from "./components/animations/AnimatedFilterableGrid";
+import { useState, useMemo } from "react";
+import ProviderCard from "./components/ProviderCard";
 
 const Providers = () => {
   const [providers, setProviders] = useState([]);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState("all");
 
   const filteredProviders = useMemo(() => {
-    if (filter === 'all') return providers;
-    return providers.filter(p => p.category === filter);
+    if (filter === "all") return providers;
+    return providers.filter((p) => p.category === filter);
   }, [providers, filter]);
 
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Filter buttons */}
       <div className="flex gap-3 mb-8">
-        <button onClick={() => setFilter('all')}>All</button>
-        <button onClick={() => setFilter('doctor')}>Doctors</button>
-        <button onClick={() => setFilter('lawyer')}>Lawyers</button>
+        <button onClick={() => setFilter("all")}>All</button>
+        <button onClick={() => setFilter("doctor")}>Doctors</button>
+        <button onClick={() => setFilter("lawyer")}>Lawyers</button>
       </div>
 
       {/* Animated grid */}
@@ -361,14 +372,15 @@ const Providers = () => {
 **File**: `src/components/animations/TiltCard.jsx`
 
 **Usage - Wrap ProviderCard**:
+
 ```jsx
-import TiltCard from './components/animations/TiltCard';
-import ProviderCard from './components/ProviderCard';
+import TiltCard from "./components/animations/TiltCard";
+import ProviderCard from "./components/ProviderCard";
 
 const Providers = () => {
   return (
     <div className="grid grid-cols-3 gap-6">
-      {providers.map(provider => (
+      {providers.map((provider) => (
         <TiltCard key={provider.id} tiltMaxAngle={10}>
           <ProviderCard {...provider} />
         </TiltCard>
@@ -385,29 +397,30 @@ const Providers = () => {
 Here's how to update your main pages:
 
 ### Updated Providers.js (Complete Example)
+
 ```jsx
-import React, { useState, useEffect, useMemo } from 'react';
-import { motion } from 'framer-motion';
-import { AnimatedProviderGrid } from './components/animations/AnimatedFilterableGrid';
-import { SkeletonCard } from './components/animations/ShimmeringSkeleton';
-import TiltCard from './components/animations/TiltCard';
-import ProviderCard from './components/ProviderCard';
+import React, { useState, useEffect, useMemo } from "react";
+import { motion } from "framer-motion";
+import { AnimatedProviderGrid } from "./components/animations/AnimatedFilterableGrid";
+import { SkeletonCard } from "./components/animations/ShimmeringSkeleton";
+import TiltCard from "./components/animations/TiltCard";
+import ProviderCard from "./components/ProviderCard";
 
 const Providers = () => {
   const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState("all");
 
   useEffect(() => {
-    fetchProviders().then(data => {
+    fetchProviders().then((data) => {
       setProviders(data);
       setLoading(false);
     });
   }, []);
 
   const filteredProviders = useMemo(() => {
-    if (filter === 'all') return providers;
-    return providers.filter(p => p.category === filter);
+    if (filter === "all") return providers;
+    return providers.filter((p) => p.category === filter);
   }, [providers, filter]);
 
   if (loading) {
@@ -443,8 +456,11 @@ export default Providers;
 
 1. **Lazy Load**: Import animation components only where needed
 2. **Reduce Motion**: Respect user preferences
+
 ```jsx
-const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const prefersReducedMotion = window.matchMedia(
+  "(prefers-reduced-motion: reduce)"
+).matches;
 ```
 
 3. **GPU Acceleration**: Use `transform` and `opacity` for best performance
