@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Eye, EyeOff, Mail, Lock, AlertCircle, CheckCircle } from 'lucide-react';
+import AnimatedInput from '../components/animations/AnimatedInput';
 
 function Login() {
   const [formData, setFormData] = useState({
@@ -106,65 +107,41 @@ function Login() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
-                Username
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  id="username"
-                  name="username"
-                  type="text"
-                  value={formData.username}
-                  onChange={handleChange}
-                  className={`block w-full pl-10 pr-3 py-3 border rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                    errors.username ? 'border-danger-300' : 'border-gray-300'
-                  }`}
-                  placeholder="Enter your username"
-                />
-              </div>
-              {errors.username && (
-                <p className="mt-1 text-sm text-danger-600">{errors.username}</p>
-              )}
-            </div>
+            <AnimatedInput
+              id="username"
+              name="username"
+              type="text"
+              value={formData.username}
+              onChange={handleChange}
+              label="Username"
+              placeholder="Enter your username"
+              icon={<Mail className="h-5 w-5" />}
+              error={errors.username}
+            />
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                Password
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={formData.password}
-                  onChange={handleChange}
-                  className={`block w-full pl-10 pr-10 py-3 border rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                    errors.password ? 'border-danger-300' : 'border-gray-300'
-                  }`}
-                  placeholder="Enter your password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-                  ) : (
-                    <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-                  )}
-                </button>
-              </div>
-              {errors.password && (
-                <p className="mt-1 text-sm text-danger-600">{errors.password}</p>
-              )}
+            <div className="relative">
+              <AnimatedInput
+                id="password"
+                name="password"
+                type={showPassword ? 'text' : 'password'}
+                value={formData.password}
+                onChange={handleChange}
+                label="Password"
+                placeholder="Enter your password"
+                icon={<Lock className="h-5 w-5" />}
+                error={errors.password}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-[38px] z-10"
+              >
+                {showPassword ? (
+                  <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                ) : (
+                  <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                )}
+              </button>
             </div>
 
             <div className="flex items-center justify-between">

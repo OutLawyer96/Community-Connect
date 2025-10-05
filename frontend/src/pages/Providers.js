@@ -18,6 +18,7 @@ import SearchFilters from "../components/SearchFilters";
 import { ProviderClaimStatus } from "../components/claims/ClaimStatusBadge";
 import SpotlightCard from "../components/SpotlightCard";
 import Iridescence from "../components/Iridescence";
+import { SkeletonCard } from "../components/animations/ShimmeringSkeleton";
 
 function Providers() {
   const navigate = useNavigate();
@@ -510,9 +511,10 @@ function Providers() {
         {/* Results */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {loading ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto"></div>
-              <p className="mt-4 text-gray-600">Loading providers...</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[...Array(6)].map((_, i) => (
+                <SkeletonCard key={i} variant="card" />
+              ))}
             </div>
           ) : (
             <>

@@ -11,6 +11,7 @@ import Providers from "./pages/Providers";
 import ProviderDetail from "./pages/ProviderDetail";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import AnimationShowcase from "./components/animations/AnimationShowcase";
 import Dashboard from "./pages/Dashboard";
 import EditProfile from "./pages/EditProfile";
 import Favorites from "./pages/Favorites";
@@ -42,6 +43,7 @@ function App() {
               <Route path="/providers" element={<Providers />} />
               <Route path="/search" element={<Providers />} />
               <Route path="/providers/:id" element={<ProviderDetail />} />
+              <Route path="/animations" element={<AnimationShowcase />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
 
