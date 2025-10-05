@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import FavoriteButton from "./FavoriteButton";
 import AnimatedInput from "./AnimatedInput";
 import ParallaxSection from "./ParallaxSection";
-import { Magnetic, MagneticButton } from "./Magnetic";
+import Magnetic, { MagneticButton } from "./Magnetic";
 import { AnimatedCheckmark, CommunityConnectLogo } from "./AnimatedSVG";
 import { SkeletonCard, SkeletonProfile } from "./ShimmeringSkeleton";
 import { ProvidersGridExample } from "./AnimatedFilterableGrid";
