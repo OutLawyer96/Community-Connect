@@ -7,6 +7,8 @@ import ScrollReveal from "../components/animations/ScrollReveal";
 import StaggeredList from "../components/animations/StaggeredList";
 import InteractiveCard from "../components/animations/InteractiveCard";
 import Iridescence from "../components/Iridescence";
+import ParallaxSection from "../components/animations/ParallaxSection";
+import Magnetic from "../components/animations/Magnetic";
 
 function Home() {
   const heroImageVariants = {
@@ -113,58 +115,53 @@ function Home() {
 
       <div className="relative z-10">
         {/* Hero Section */}
-        <div
+        <ParallaxSection
+          backgroundImage="https://images.unsplash.com/photo-1521791136064-7986c2920216?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80"
+          speed={0.5}
           className="relative text-white overflow-hidden"
-          style={{
-            background: "rgba(59, 130, 246, 0.3)",
-            backdropFilter: "blur(10px)",
-          }}
+          overlayOpacity={0.3}
         >
-          <div className="max-w-7xl mx-auto">
-            <div className="relative z-10 pb-8 sm:pb-16 md:pb-20 lg:max-w-2xl lg:w-full lg:pb-28 xl:pb-32">
-              <motion.main
-                variants={heroContentVariants}
-                initial="initial"
-                animate="animate"
-                className="mt-10 mx-auto max-w-7xl px-4 sm:mt-12 sm:px-6 md:mt-16 lg:mt-20 lg:px-8 xl:mt-28"
-              >
-                <div className="sm:text-center lg:text-left">
-                  <h1 className="text-4xl tracking-tight font-extrabold sm:text-5xl md:text-6xl">
-                    <span className="block xl:inline">Find Local Services</span>{" "}
-                    <span className="block text-indigo-200 xl:inline">
-                      You Can Trust
-                    </span>
-                  </h1>
-                  <p className="mt-3 text-base text-indigo-100 sm:mt-5 sm:text-lg sm:max-w-xl sm:mx-auto md:mt-5 md:text-xl lg:mx-0">
-                    Community Connect helps you find reliable local service
-                    providers, from plumbers to pet sitters, all reviewed by
-                    your neighbors.
-                  </p>
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 }}
-                    className="mt-5 sm:mt-8"
-                  >
-                    <AutocompleteSearch />
-                  </motion.div>
-                </div>
-              </motion.main>
+          <div
+            className="relative"
+            style={{
+              background: "rgba(59, 130, 246, 0.3)",
+              backdropFilter: "blur(10px)",
+            }}
+          >
+            <div className="max-w-7xl mx-auto">
+              <div className="relative z-10 pb-8 sm:pb-16 md:pb-20 lg:max-w-2xl lg:w-full lg:pb-28 xl:pb-32">
+                <motion.main
+                  variants={heroContentVariants}
+                  initial="initial"
+                  animate="animate"
+                  className="mt-10 mx-auto max-w-7xl px-4 sm:mt-12 sm:px-6 md:mt-16 lg:mt-20 lg:px-8 xl:mt-28"
+                >
+                  <div className="sm:text-center lg:text-left">
+                    <h1 className="text-4xl tracking-tight font-extrabold sm:text-5xl md:text-6xl">
+                      <span className="block xl:inline">Find Local Services</span>{" "}
+                      <span className="block text-indigo-200 xl:inline">
+                        You Can Trust
+                      </span>
+                    </h1>
+                    <p className="mt-3 text-base text-indigo-100 sm:mt-5 sm:text-lg sm:max-w-xl sm:mx-auto md:mt-5 md:text-xl lg:mx-0">
+                      Community Connect helps you find reliable local service
+                      providers, from plumbers to pet sitters, all reviewed by
+                      your neighbors.
+                    </p>
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.4 }}
+                      className="mt-5 sm:mt-8"
+                    >
+                      <AutocompleteSearch />
+                    </motion.div>
+                  </div>
+                </motion.main>
+              </div>
             </div>
           </div>
-          <motion.div
-            variants={heroImageVariants}
-            initial="initial"
-            animate="animate"
-            className="lg:absolute lg:inset-y-0 lg:right-0 lg:w-1/2"
-          >
-            <img
-              className="h-56 w-full object-cover sm:h-72 md:h-96 lg:w-full lg:h-full"
-              src="https://images.unsplash.com/photo-1521791136064-7986c2920216?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80"
-              alt="Community"
-            />
-          </motion.div>
-        </div>
+        </ParallaxSection>
 
         {/* Features Section */}
         <ScrollReveal>
@@ -272,16 +269,16 @@ function Home() {
                 </span>
               </h2>
               <div className="mt-8 flex lg:mt-0 lg:flex-shrink-0">
-                <InteractiveCard>
+                <Magnetic strength={0.3}>
                   <Link
                     to="/register"
-                    className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+                    className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
                   >
                     Get started
                   </Link>
-                </InteractiveCard>
+                </Magnetic>
                 <div className="ml-3">
-                  <InteractiveCard>
+                  <Magnetic strength={0.25}>
                     <Link
                       to="/providers"
                       className="inline-flex items-center justify-center px-5 py-3 border-2 border-white text-base font-medium rounded-md text-white transition-all duration-300"
@@ -303,7 +300,7 @@ function Home() {
                     >
                       Browse Providers
                     </Link>
-                  </InteractiveCard>
+                  </Magnetic>
                 </div>
               </div>
             </div>

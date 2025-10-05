@@ -137,13 +137,13 @@ class Command(BaseCommand):
             },
         ]
 
-        for prov_data in providers_data:
         # Build category lookup dict
         category_map = {cat.name: cat for cat in categories}
 
         for prov_data in providers_data:
             category = category_map[prov_data['category']]
-            # …rest of loop unchanged            
+            # …rest of loop unchanged                        provider, created = Provider.objects.get_or_create(
+                business_name=prov_data['business_name'],
             provider, created = Provider.objects.get_or_create(
                 business_name=prov_data['business_name'],
                 defaults={
@@ -153,10 +153,9 @@ class Command(BaseCommand):
                     'website': prov_data['website'],
                     'is_active': True,
                     'is_claimed': False,
-            if created:
-                # Create address
-                address_data = prov_data['address']
-                Address.objects.get_or_create(
+                }
+            )
+            if created:                Address.objects.get_or_create(
                     provider=provider,
                     defaults={
                         'street': address_data['street'],
@@ -172,6 +171,7 @@ class Command(BaseCommand):
                 
                 # Create services
                 Service.objects.get_or_create(
+                Service.objects.get_or_create(
                     provider=provider,
                     category=category,
                     defaults={
@@ -181,11 +181,7 @@ class Command(BaseCommand):
                         'price_type': 'hourly',
                         'is_active': True
                     }
-                )                    price_type='hourly',
-                    is_active=True
-                )
-                
-                self.stdout.write(self.style.SUCCESS(f'Created provider: {provider.business_name}'))
+                )                self.stdout.write(self.style.SUCCESS(f'Created provider: {provider.business_name}'))
 
         self.stdout.write(self.style.SUCCESS('Sample data created successfully!'))
         self.stdout.write(f'Created {Category.objects.count()} categories')

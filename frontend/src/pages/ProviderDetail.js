@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { 
   Star, MapPin, Phone, MessageCircle, Calendar, ArrowLeft,
   CheckCircle, Heart, Share2, User, Shield, Clock, Award, Mail, Globe
@@ -141,9 +142,12 @@ function ProviderDetail() {
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between">
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-4 flex-wrap">
-                  <h1 className="text-3xl font-bold text-gray-900">
+                  <motion.h1 
+                    layoutId={`provider-name-${provider.id}`}
+                    className="text-3xl font-bold text-gray-900"
+                  >
                     {provider.business_name}
-                  </h1>
+                  </motion.h1>
                   <ProviderClaimStatus provider={provider} />
                   {provider.is_verified && (
                     <CheckCircle className="w-8 h-8 text-green-500" title="Verified Provider" />

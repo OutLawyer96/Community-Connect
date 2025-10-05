@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Search,
   Filter,
@@ -559,29 +560,54 @@ function Providers() {
                       </div>
                     </div>
                   ) : (
-                    <div
-                      className={
-                        viewMode === "grid"
-                          ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-                          : "space-y-4"
-                      }
-                    >
-                      {(providers || []).map((provider, index) =>
-                        viewMode === "grid" ? (
-                          <ProviderCard
-                            key={provider.id ?? index}
-                            provider={provider}
-                            index={index}
-                          />
-                        ) : (
-                          <ProviderListItem
-                            key={provider.id ?? index}
-                            provider={provider}
-                            index={index}
-                          />
-                        )
-                      )}
-                    </div>
+                    <AnimatePresence mode="popLayout">
+                      <motion.div
+                        layout
+                        className={
+                          viewMode === "grid"
+                            ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                            : "space-y-4"
+                        }
+                      >
+                        {(providers || []).map((provider, index) =>
+                          viewMode === "grid" ? (
+                            <motion.div
+                              key={provider.id ?? index}
+                              layout
+                              initial={{ opacity: 0, scale: 0.9 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.9 }}
+                              transition={{ 
+                                duration: 0.3,
+                                delay: index * 0.05
+                              }}
+                            >
+                              <ProviderCard
+                                provider={provider}
+                                index={index}
+                              />
+                            </motion.div>
+                          ) : (
+                            <motion.div
+                              key={provider.id ?? index}
+                              layout
+                              initial={{ opacity: 0, x: -20 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              exit={{ opacity: 0, x: -20 }}
+                              transition={{ 
+                                duration: 0.3,
+                                delay: index * 0.05
+                              }}
+                            >
+                              <ProviderListItem
+                                provider={provider}
+                                index={index}
+                              />
+                            </motion.div>
+                          )
+                        )}
+                      </motion.div>
+                    </AnimatePresence>
                   )}
 
                   {/* Pagination Controls */}

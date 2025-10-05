@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useSpring, animated } from "@react-spring/web";
 import { useInView } from "react-intersection-observer";
+import { motion } from "framer-motion";
 import { Star, MapPin, MessageCircle } from "lucide-react";
 import SpotlightCard from "./SpotlightCard";
 import TiltCard from "./animations/TiltCard";
@@ -35,7 +36,8 @@ const ProviderCard = ({ provider, index }) => {
           <Link to={`/providers/${provider.id}`}>
             {provider.image && (
               <div className="relative h-48 overflow-hidden">
-                <img
+                <motion.img
+                  layoutId={`provider-image-${provider.id}`}
                   src={provider.image}
                   alt={provider.name}
                   className="w-full h-full object-cover"
@@ -52,7 +54,12 @@ const ProviderCard = ({ provider, index }) => {
               </div>
             )}
             <div className="p-4">
-              <h3 className="text-xl font-semibold mb-2">{provider.name}</h3>
+              <motion.h3 
+                layoutId={`provider-name-${provider.id}`}
+                className="text-xl font-semibold mb-2"
+              >
+                {provider.name}
+              </motion.h3>
               <div className="flex items-center mb-2">
                 <MapPin className="w-4 h-4 text-gray-500 mr-1" />
                 <span className="text-gray-600 text-sm">{provider.location}</span>
